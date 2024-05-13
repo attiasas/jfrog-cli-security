@@ -27,6 +27,33 @@ type SecurityCommandsSummary struct {
 	AuditCommands     []formats.SummaryResults `json:"auditCommands"`
 }
 
+func (scs *SecurityCommandsSummary) CreateSummaryMarkdown(content any, section jobsummaries.MarkdownSection) (err error) {
+
+	previousObjects, err := jobsummaries.LoadFile(jobsummaries.GetSectionFileName(section))
+	if err != nil {
+		return fmt.Errorf("failed to load previous objects: %w", err)
+	}
+
+	dataAsBytes, err := scs.appendResultObject(content, previousObjects)
+	if err != nil {
+		return fmt.Errorf("failed to parase markdown section objects: %w", err)
+	}
+
+	if err = jobsummaries.WriteFile(dataAsBytes, jobsummaries.GetSectionFileName(section)); err != nil {
+		return fmt.Errorf("failed to write aggregated data to file: %w", err)
+	}
+
+	markdown, err := scs.renderContentToMarkdown(dataAsBytes)
+	if err != nil {
+		return fmt.Errorf("failed to render markdown :%w", err)
+	}
+
+	if err = jobsummaries.WriteMarkdownToFileSystem(markdown, scs.GetSectionTitle(), section); err != nil {
+		return fmt.Errorf("failed to save markdown to file system")
+	}
+	return err
+}
+
 // Manage the job summary for security commands
 func SecurityCommandsJobSummary() (js *jobsummaries.JobSummary, err error) {
 	return jobsummaries.NewJobSummaryImpl(&SecurityCommandsSummary{
@@ -42,14 +69,14 @@ func RecordSecurityCommandOutput(content ScanCommandSummaryResult) (err error) {
 	if err != nil || manager == nil {
 		return
 	}
-	return manager.RecordResult(content, jobsummaries.SecuritySection)
+	return manager.CreateSummaryMarkdown(content, jobsummaries.SecuritySection)
 }
 
 func (scs *SecurityCommandsSummary) GetSectionTitle() string {
 	return "🛡️ Security scans preformed by this job"
 }
 
-func (scs *SecurityCommandsSummary) AppendResultObject(output interface{}, previousObjects []byte) (result []byte, err error) {
+func (scs *SecurityCommandsSummary) appendResultObject(output interface{}, previousObjects []byte) (result []byte, err error) {
 	// Unmarshal the aggregated data
 	if len(previousObjects) > 0 {
 		if err = json.Unmarshal(previousObjects, &scs); err != nil {
@@ -73,7 +100,7 @@ func (scs *SecurityCommandsSummary) AppendResultObject(output interface{}, previ
 	return json.Marshal(scs)
 }
 
-func (scs *SecurityCommandsSummary) RenderContentToMarkdown(content []byte) (markdown string, err error) {
+func (scs *SecurityCommandsSummary) renderContentToMarkdown(content []byte) (markdown string, err error) {
 	// Unmarshal the data into an array of build info objects
 	if err = json.Unmarshal(content, &scs); err != nil {
 		return "", fmt.Errorf("failed while creating security markdown: %w", err)
