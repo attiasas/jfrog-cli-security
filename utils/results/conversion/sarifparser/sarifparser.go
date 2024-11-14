@@ -423,7 +423,17 @@ func getScaLicenseViolationMarkdown(depName, version, key string, directDependen
 func patchRunsToPassIngestionRules(cmdType utils.CommandType, subScanType utils.SubScanType, patchBinaryPaths bool, target results.ScanTarget, runs ...*sarif.Run) []*sarif.Run {
 	// Since we run in temp directories files should be relative
 	// Patch by converting the file paths to relative paths according to the invocations
+	if subScanType == utils.ScaScan {
+		if str, e := utils.GetAsJsonString(runs, true, true); e == nil {
+			log.Debug(fmt.Sprintf("Before patching sca paths:\n%s", str))
+		}
+	}
 	convertPaths(cmdType, subScanType, runs...)
+	if subScanType == utils.ScaScan {
+		if str, e := utils.GetAsJsonString(runs, true, true); e == nil {
+			log.Debug(fmt.Sprintf("After patching sca paths:\n%s", str))
+		}
+	}
 	patchedRuns := []*sarif.Run{}
 	// Patch changes may alter the original run, so we will create a new run for each
 	for _, run := range runs {
