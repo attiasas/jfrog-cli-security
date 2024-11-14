@@ -517,10 +517,20 @@ func patchResults(commandType utils.CommandType, subScanType utils.SubScanType, 
 				markdown = getScaInBinaryMarkdownMsg(commandType, target, result)
 			}
 			sarifutils.SetResultMsgMarkdown(markdown, result)
+			for _, location := range result.Locations {
+				if locStr, e := utils.GetAsJsonString(location, true, true); e == nil {
+					log.Debug(fmt.Sprintf("%s: before Path binary location:\n%s", subScanType, locStr))
+				}
+			}
 			if patchBinaryPaths {
 				log.Debug(fmt.Sprintf("Patching binary paths for result [ruleId=%s]: %s", sarifutils.GetResultRuleId(result), sarifutils.GetResultMsgText(result)))
 				// For Binary scans, override the physical location if applicable (after data already used for markdown)
 				result = convertBinaryPhysicalLocations(commandType, run, result)
+			}
+			for _, location := range result.Locations {
+				if locStr, e := utils.GetAsJsonString(location, true, true); e == nil {
+					log.Debug(fmt.Sprintf("%s: After Path binary location:\n%s", subScanType, locStr))
+				}
 			}
 			// Calculate the fingerprints if not exists
 			if !sarifutils.IsFingerprintsExists(result) {
