@@ -110,8 +110,13 @@ func (sc *CmdResultsSarifConverter) ParseNewTargetResults(target results.ScanTar
 func (sc *CmdResultsSarifConverter) createScaRun(target results.ScanTarget, errorCount int) *sarif.Run {
 	run := sarif.NewRunWithInformationURI(ScaScannerToolName, utils.BaseDocumentationURL+"sca")
 	run.Tool.Driver.Version = &sc.xrayVersion
+	wd := target.Target
+	if sc.currentCmdType.IsTargetBinary() {
+		// For binary, the target is a file and not a directory
+		wd = filepath.Dir(wd)
+	}
 	run.Invocations = append(run.Invocations, sarif.NewInvocation().
-		WithWorkingDirectory(sarif.NewSimpleArtifactLocation(target.Target)).
+		WithWorkingDirectory(sarif.NewSimpleArtifactLocation(wd)).
 		WithExecutionSuccess(errorCount == 0),
 	)
 	return run
