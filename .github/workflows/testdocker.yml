@@ -25,7 +25,7 @@ jobs:
     env:
       DOCKER_REPO: ${{ github.event.inputs.rt_docker_repo }}
       IMAGE_NAME: ${{ github.event.inputs.docker_image_name }}
-      JFROG_CLI_LOG_LEVEL: "DEBUG"
+      # JFROG_CLI_LOG_LEVEL: "DEBUG"
     # Here we install all the tools : docker buildx, QEMU, JDK 11, JFrog CLI
     steps:
       - name: Print Inputs
