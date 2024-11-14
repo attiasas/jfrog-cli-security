@@ -88,6 +88,14 @@ func getAuditAndScansCommands() []components.Command {
 			Hidden: true,
 		},
 		{
+			Name: "ds",
+			Flags: flags.GetCommandFlags(flags.DockerScan),
+			Action: func(c *components.Context) error {
+				args := pluginsCommon.ExtractArguments(c)
+				return DockerScan(c, args[0])
+			},
+		},
+		{
 			Name:        "audit",
 			Aliases:     []string{"aud"},
 			Flags:       flags.GetCommandFlags(flags.Audit),
