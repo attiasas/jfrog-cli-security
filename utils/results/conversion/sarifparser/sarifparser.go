@@ -324,8 +324,12 @@ func parseScaToSarifFormat(cmdType utils.CommandType, xrayId, summary, markdownD
 		// Add location
 		issueLocation := getComponentSarifLocation(cmdType, directDependency)
 		if issueLocation != nil {
+			if str, e := utils.GetAsJsonString(issueLocation, true, true); e == nil {
+				log.Debug(fmt.Sprintf("Raw convert:\n%s", str))
+			}
 			issueResult.AddLocation(issueLocation)
 		}
+		
 		sarifResults = append(sarifResults, issueResult)
 	}
 	return
@@ -514,6 +518,7 @@ func patchResults(commandType utils.CommandType, subScanType utils.SubScanType, 
 			}
 			sarifutils.SetResultMsgMarkdown(markdown, result)
 			if patchBinaryPaths {
+				log.Debug(fmt.Sprintf("Patching binary paths for result [ruleId=%s]: %s", sarifutils.GetResultRuleId(result), sarifutils.GetResultMsgText(result)))
 				// For Binary scans, override the physical location if applicable (after data already used for markdown)
 				result = convertBinaryPhysicalLocations(commandType, run, result)
 			}
@@ -532,6 +537,7 @@ func patchResults(commandType utils.CommandType, subScanType utils.SubScanType, 
 // This method may need to replace the physical location if applicable, to avoid override on the existing object we will return a new object if changed
 func convertBinaryPhysicalLocations(commandType utils.CommandType, run *sarif.Run, result *sarif.Result) *sarif.Result {
 	if patchedLocation := getPatchedBinaryLocation(commandType, run); patchedLocation != "" {
+		log.Debug(fmt.Sprintf("Patching binary location for result [ruleId=%s] %s to: '%s'", sarifutils.GetResultRuleId(result), sarifutils.GetResultMsgText(result), patchedLocation))
 		patched := sarifutils.CopyResult(result)
 		for _, location := range patched.Locations {
 			// Patch the location - Reset the uri and region
