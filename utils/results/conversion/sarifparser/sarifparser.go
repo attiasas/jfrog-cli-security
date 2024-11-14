@@ -511,6 +511,12 @@ func patchResults(commandType utils.CommandType, subScanType utils.SubScanType, 
 		}
 		if commandType.IsTargetBinary() {
 			var markdown string
+			
+			for _, location := range result.Locations {
+				if locStr, e := utils.GetAsJsonString(location, true, true); e == nil {
+					log.Debug(fmt.Sprintf("%s: before Markdown binary location:\n%s", subScanType, locStr))
+				}
+			}
 			if subScanType == utils.SecretsScan {
 				markdown = getSecretInBinaryMarkdownMsg(commandType, target, result)
 			} else {
@@ -526,11 +532,6 @@ func patchResults(commandType utils.CommandType, subScanType utils.SubScanType, 
 				log.Debug(fmt.Sprintf("Patching binary paths for result [ruleId=%s]: %s", sarifutils.GetResultRuleId(result), sarifutils.GetResultMsgText(result)))
 				// For Binary scans, override the physical location if applicable (after data already used for markdown)
 				result = convertBinaryPhysicalLocations(commandType, run, result)
-			}
-			for _, location := range result.Locations {
-				if locStr, e := utils.GetAsJsonString(location, true, true); e == nil {
-					log.Debug(fmt.Sprintf("%s: After Path binary location:\n%s", subScanType, locStr))
-				}
 			}
 			// Calculate the fingerprints if not exists
 			if !sarifutils.IsFingerprintsExists(result) {
@@ -657,6 +658,9 @@ func getBaseBinaryDescriptionMarkdown(commandType utils.CommandType, target resu
 	}
 	var location *sarif.Location
 	if len(result.Locations) > 0 {
+		if locStr, e := utils.GetAsJsonString(result.Locations, true, true); e == nil {
+			log.Debug(fmt.Sprintf("%s Multiple locations:\n%s",subScanType, locStr))
+		}
 		location = result.Locations[0]
 	}
 	return content + getBinaryLocationMarkdownString(commandType, subScanType, result, location)
