@@ -1,0 +1,60 @@
+name: "fg-dsod24-github-ejs-build"
+
+on: 
+  workflow_dispatch:
+    inputs:
+      rt_docker_repo:
+            required: true
+            type: string
+            default: "fg-docker"
+            description: "Artifactory Docker repository"
+      docker_image_name:
+        required: true
+        type: string
+        default: "ejs"
+        description: "Docker Image name"
+      xr_override_fail_build:
+        required: true
+        type: string
+        default: "false"
+        description: "Set to false to ignore the fail build coming from Xray (exit code 3)"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      DOCKER_REPO: ${{ github.event.inputs.rt_docker_repo }}
+      IMAGE_NAME: ${{ github.event.inputs.docker_image_name }}
+      JFROG_CLI_LOG_LEVEL: "DEBUG"
+    # Here we install all the tools : docker buildx, QEMU, JDK 11, JFrog CLI
+    steps:
+      - name: Print Inputs
+        run: echo "${{ toJSON(github.event.inputs) }}"
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Install Node
+        uses: actions/setup-node@v4
+        with:
+            node-version: 18
+
+      - name: Setup JFrog CLI 
+        uses: jfrog/setup-jfrog-cli@v4
+        id: setup-cli
+        env:
+          JF_URL: https://${{ vars.JF_URL }}/
+          JF_PROJECT: ${{ vars.JF_PROJECT }}
+          JF_ACCESS_TOKEN: ${{ secrets.JF_TOKEN }}
+          JF_GIT_TOKEN: ${{ secrets.JJ_GITHUB_TOKEN }}
+        with:
+          version: 2.71.3
+
+      - name: Docker Scan
+        run: |
+          echo "digest=$(docker images --no-trunc --quiet ${{ vars.JF_URL }}/${{ env.DOCKER_REPO }}/${{ env.IMAGE_NAME }})" >> $GITHUB_OUTPUT
+          jf docker pull ${{ vars.JF_URL }}/${{ env.DOCKER_REPO }}/${{ env.IMAGE_NAME }}:53
+          ds ${{ vars.JF_URL }}/${{ env.DOCKER_REPO }}/${{ env.IMAGE_NAME }}:53 --vuln --fail=${{ github.event.inputs.xr_override_fail_build }} --format=sarif
