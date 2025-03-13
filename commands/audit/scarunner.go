@@ -132,6 +132,11 @@ func executeScaScanTask(auditParallelRunner *utils.SecurityParallelRunner, serve
 	return func(threadId int) (err error) {
 		defer auditParallelRunner.ScaScansWg.Done()
 		log.Info(clientutils.GetLogMsgPrefix(threadId, false)+"Running SCA scan for", scan.Target, "vulnerable dependencies in", scan.Target, "directory...")
+		if treeResult != nil && treeResult.FullDepTrees != nil {
+			if err = dumpTreeGraphToFileIfNeeded(treeResult.FullDepTrees, auditParams.scanResultsOutputDir, utils.ScaScan); err != nil {
+				return
+			}
+		}
 		// Scan the dependency tree.
 		scanResults, xrayErr := runScaWithTech(scan.Technology, auditParams, serverDetails, *treeResult.FlatTree, treeResult.FullDepTrees)
 
@@ -413,4 +418,15 @@ func dumpScanResponseToFileIfNeeded(results []services.ScanResponse, scanResults
 		return fmt.Errorf("failed to write %s scan results to file: %s", scanType, err.Error())
 	}
 	return utils.DumpContentToFile(fileContent, scanResultsOutputDir, scanType.String())
+}
+
+func dumpTreeGraphToFileIfNeeded(FullDepTrees []*xrayCmdUtils.GraphNode, scanResultsOutputDir string, scanType utils.SubScanType) (err error) {
+	if scanResultsOutputDir == "" || FullDepTrees == nil {
+		return
+	}
+	fileContent, err := json.Marshal(FullDepTrees)
+	if err != nil {
+		return fmt.Errorf("failed to write %s dependency tree to file: %s", scanType, err.Error())
+	}
+	return utils.DumpContentToFile(fileContent, scanResultsOutputDir, scanType.String()+"_tree")
 }
