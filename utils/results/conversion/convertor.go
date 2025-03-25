@@ -3,9 +3,11 @@ package conversion
 import (
 	"strings"
 
+	"github.com/CycloneDX/cyclonedx-go"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
+	"github.com/jfrog/jfrog-cli-security/utils/results/conversion/cyclonedxparser"
 	"github.com/jfrog/jfrog-cli-security/utils/results/conversion/sarifparser"
 	"github.com/jfrog/jfrog-cli-security/utils/results/conversion/simplejsonparser"
 	"github.com/jfrog/jfrog-cli-security/utils/results/conversion/summaryparser"
@@ -82,6 +84,11 @@ func (c *CommandResultsConvertor) ConvertToTable(cmdResults *results.SecurityCom
 
 func (c *CommandResultsConvertor) ConvertToSummary(cmdResults *results.SecurityCommandResults) (summaryResults formats.ResultsSummary, err error) {
 	parser := summaryparser.NewCmdResultsSummaryConverter(c.Params.IncludeVulnerabilities, c.Params.HasViolationContext)
+	return parseCommandResults(c.Params, parser, cmdResults)
+}
+
+func (c *CommandResultsConvertor) ConvertToCycloneDx(cmdResults *results.SecurityCommandResults) (cycloneDxResults *cyclonedx.BOM, err error) {
+	parser := cyclonedxparser.NewCmdResultsCycloneDxConverter(c.Params.IncludeVulnerabilities, c.Params.HasViolationContext)
 	return parseCommandResults(c.Params, parser, cmdResults)
 }
 
