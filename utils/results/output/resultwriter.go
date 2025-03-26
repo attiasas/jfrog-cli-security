@@ -14,6 +14,8 @@ import (
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
+
+	"github.com/CycloneDX/cyclonedx-go"
 	"github.com/owenrumney/go-sarif/v2/sarif"
 )
 
@@ -125,6 +127,8 @@ func (rw *ResultsWriter) PrintScanResults() error {
 			return err
 		}
 		return rw.printSarif()
+	case format.CycloneDx:
+		return rw.printCycloneDx()
 	}
 	return nil
 }
@@ -155,6 +159,21 @@ func (rw *ResultsWriter) printSarif() error {
 	log.Output(sarifFile)
 	callback()
 	return nil
+}
+
+func (rw *ResultsWriter) printCycloneDx() error {
+	bom, err := rw.createResultsConvertor(true).ConvertToCycloneDx(rw.commandResults)
+	if err != nil {
+		return err
+	}
+	file, err := os.Create("/Users/assafa/Documents/code/jfrog-projects/jfrog-cli-security/bom.json")
+	if err != nil {
+		return errorutils.CheckError(err)
+	}
+	if err = cyclonedx.NewBOMEncoder(file, cyclonedx.BOMFileFormatJSON).SetPretty(true).Encode(bom); err != nil {
+		return err
+	}
+	return cyclonedx.NewBOMEncoder(os.Stdout, cyclonedx.BOMFileFormatJSON).SetPretty(true).Encode(bom)
 }
 
 func PrintJson(output interface{}) (err error) {

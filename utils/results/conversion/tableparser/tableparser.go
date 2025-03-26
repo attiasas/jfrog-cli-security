@@ -1,6 +1,9 @@
 package tableparser
 
 import (
+	"sort"
+
+	"github.com/CycloneDX/cyclonedx-go"
 	"github.com/owenrumney/go-sarif/v2/sarif"
 	"golang.org/x/exp/maps"
 
@@ -8,19 +11,20 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/results/conversion/simplejsonparser"
+	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 
 	"github.com/jfrog/jfrog-client-go/xray/services"
 )
 
 type CmdResultsTableConverter struct {
 	simpleJsonConvertor *simplejsonparser.CmdResultsSimpleJsonConverter
-	sbomInfo            map[string]results.SbomEntry
+	sbomInfo            map[string]formats.SbomTableRow
 	// If supported, pretty print the output in the tables
 	pretty bool
 }
 
 func NewCmdResultsTableConverter(pretty bool) *CmdResultsTableConverter {
-	return &CmdResultsTableConverter{pretty: pretty, simpleJsonConvertor: simplejsonparser.NewCmdResultsSimpleJsonConverter(pretty, true), sbomInfo: make(map[string]results.SbomEntry)}
+	return &CmdResultsTableConverter{pretty: pretty, simpleJsonConvertor: simplejsonparser.NewCmdResultsSimpleJsonConverter(pretty, true), sbomInfo: make(map[string]formats.SbomTableRow)}
 }
 
 func (tc *CmdResultsTableConverter) Get() (formats.ResultsTables, error) {
@@ -30,7 +34,7 @@ func (tc *CmdResultsTableConverter) Get() (formats.ResultsTables, error) {
 	}
 	return formats.ResultsTables{
 		LicensesTable: formats.ConvertToLicenseTableRow(simpleJsonFormat.Licenses),
-		SbomTable:     convertToSbomTableRow(maps.Values(tc.sbomInfo)),
+		SbomTable:     SortSbom(maps.Values(tc.sbomInfo)),
 
 		SecurityVulnerabilitiesTable:   formats.ConvertToScaVulnerabilityOrViolationTableRow(simpleJsonFormat.Vulnerabilities),
 		SecurityViolationsTable:        formats.ConvertToScaVulnerabilityOrViolationTableRow(simpleJsonFormat.SecurityViolations),
@@ -73,35 +77,51 @@ func (tc *CmdResultsTableConverter) ParseSast(target results.ScanTarget, isViola
 	return tc.simpleJsonConvertor.ParseSast(target, isViolationsResults, sast)
 }
 
-func (tc *CmdResultsTableConverter) ParseSbom(_ results.ScanTarget, sbom results.Sbom) (err error) {
-	for _, entry := range sbom.Components {
-		if parsedEntry, exists := tc.sbomInfo[entry.String()]; exists {
-			if entry.Direct && !parsedEntry.Direct {
-				// If the entry is direct, we want to override the existing entry
-				tc.sbomInfo[entry.String()] = entry
-			}
-			continue
+func (tc *CmdResultsTableConverter) ParseSbom(_ results.ScanTarget, sbom *cyclonedx.BOM) (err error) {
+	return results.ForEachSbom(sbom, func(dependency cyclonedx.Dependency, relatedComponent *cyclonedx.Component, isDirect bool) (e error) {
+		id := dependency.Ref
+		if relatedComponent != nil {
+			id = relatedComponent.PackageURL
 		}
-		// If the entry does not exist, we want to add it
-		tc.sbomInfo[entry.String()] = entry
-	}
-	return
+		currName, currVersion, currType := techutils.SplitComponentId(id)
+		entry := formats.SbomTableRow{Component: currName, Version: currVersion, PackageType: currType, Relation: getDirectStr(isDirect), Direct: isDirect}
+		if parsedEntry, exists := tc.sbomInfo[dependency.Ref]; exists {
+			if entry.Direct && !parsedEntry.Direct {
+				// If the new entry is direct, we want to override the existing entry
+				tc.sbomInfo[dependency.Ref] = entry
+			}
+			// No need to add the entry again
+			return
+		}
+		// The entry does not exist, we want to add it
+		tc.sbomInfo[dependency.Ref] = entry
+		return
+	})
 }
 
-func convertToSbomTableRow(rows []results.SbomEntry) (tableRows []formats.SbomTableRow) {
-	results.SortSbom(rows)
-	for _, entry := range rows {
-		relation := "Direct"
-		if !entry.Direct {
-			relation = "Transitive"
-		}
-		tableRows = append(tableRows, formats.SbomTableRow{
-			Component:   entry.Component,
-			PackageType: entry.Type,
-			Direct:      entry.Direct,
-			Version:     entry.Version,
-			Relation:    relation,
-		})
+func getDirectStr(isDirect bool) string {
+	if isDirect {
+		return "Direct"
 	}
-	return
+	return "Transitive"
+}
+
+func SortSbom(components []formats.SbomTableRow) []formats.SbomTableRow {
+	sort.Slice(components, func(i, j int) bool {
+		if components[i].Direct == components[j].Direct {
+			if components[i].Component == components[j].Component {
+				if components[i].Version == components[j].Version {
+					// Last order by type
+					return components[i].PackageType < components[j].PackageType
+				}
+				// Third order by version
+				return components[i].Version < components[j].Version
+			}
+			// Second order by component
+			return components[i].Component < components[j].Component
+		}
+		// First order by direct components
+		return components[i].Direct
+	})
+	return components
 }
