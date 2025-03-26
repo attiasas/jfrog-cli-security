@@ -702,7 +702,15 @@ func GetAllTechnologiesList() (technologies []Technology) {
 //     Component name: "invalid-comp-id"
 //     Component version: ""
 //     Package type: ""
-func SplitComponentId(componentId string) (string, string, string) {
+func SplitComponentId(componentId string) (compName, compVersion, packageType string) {
+	compName, compVersion, packageType = SplitComponentIdRaw(componentId)
+	if packageType != "" {
+		packageType = packageTypes[packageType]
+	}
+	return
+}
+
+func SplitComponentIdRaw(componentId string) (string, string, string) {
 	compIdParts := strings.Split(componentId, "://")
 	// Invalid component ID
 	if len(compIdParts) != 2 {
@@ -715,7 +723,7 @@ func SplitComponentId(componentId string) (string, string, string) {
 	// Generic identifier structure: generic://sha256:<Checksum>/name
 	if packageType == "generic" {
 		lastSlashIndex := strings.LastIndex(packageId, "/")
-		return packageId[lastSlashIndex+1:], "", packageTypes[packageType]
+		return packageId[lastSlashIndex+1:], "", packageType
 	}
 
 	var compName, compVersion string
@@ -744,5 +752,63 @@ func SplitComponentId(componentId string) (string, string, string) {
 		compName = packageId
 	}
 
-	return compName, compVersion, packageTypes[packageType]
+	return compName, compVersion, packageType
+}
+
+// A purl is a URL composed of seven components: scheme:type/namespace/name@version?qualifiers#subpath
+// This function splits a purl to the component name, version and package type.
+// Examples:
+//  1. purl: "pkg:golang/github.com/gophish/gophish@v0.1.2"
+//     Returned values:
+//     Component name: "github.com/gophish/gophish"
+//     Component version: "v0.1.2"
+//     Package type: "golang"
+//  2. purl: "pkg:golang/github.com/go-gitea/gitea"
+//     Returned values:
+//     Component name: "github.com/go-gitea/gitea"
+//     Component version: ""
+//     Package type: "golang"
+func SplitPackageURL(purl string) (compName, compVersion, packageType string) {
+	// Make sure the purl is the correct scheme
+	idParts := strings.Split(purl, ":")
+	if len(idParts) != 2 || idParts[0] != "pkg" {
+		return purl, "", ""
+	}
+	// Split the package type and the component ID by the first '/'
+	compIdParts := strings.SplitN(idParts[1], "/", 2)
+	if len(compIdParts) != 2 {
+		return purl, "", ""
+	}
+	packageType = compIdParts[0]
+	compId := compIdParts[1]
+	// Split the component ID by the '@' character
+	compIdParts = strings.SplitN(compId, "@", 2)
+	compName = compIdParts[0]
+	if len(compIdParts) == 2 {
+		// get the version str only
+		compVersion = compIdParts[1]
+		if strings.Contains(compVersion, "?") {
+			compVersion = strings.Split(compVersion, "?")[0]
+		}
+		if strings.Contains(compVersion, "#") {
+			compVersion = strings.Split(compVersion, "#")[0]
+		}
+	}
+	return
+}
+
+func ToXrayComponentId(compName, version, packageType string) (output string) {
+	output = fmt.Sprintf("%s://%s", packageType, compName)
+	if version != "" {
+		output += fmt.Sprintf(":%s", version)
+	}
+	return
+}
+
+func ToPackageUrl(compName, version, packageType string) (output string) {
+	output = fmt.Sprintf("pkg:%s/%s", packageType, compName)
+	if version != "" {
+		output += fmt.Sprintf("@%s", version)
+	}
+	return
 }

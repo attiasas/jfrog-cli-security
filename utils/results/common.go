@@ -234,6 +234,7 @@ func getDirectComponents(bom *cyclonedx.BOM) (directComponentRefs []string) {
 	applicationRefs := getApplicationComponentRefs(bom)
 	// Collect all the direct dependencies of the 'Application' components
 	for _, dependency := range *bom.Dependencies {
+		if slices.Contains(applicationRefs, dependency.Ref) {
 			directComponentRefs = append(directComponentRefs, *dependency.Dependencies...)
 		}
 	}
