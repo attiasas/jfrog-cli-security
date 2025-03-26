@@ -62,7 +62,7 @@ type ParseScaVulnerabilityFunc func(vulnerability services.Vulnerability, cves [
 type ParseScaViolationFunc func(violation services.Violation, cves []formats.CveRow, applicabilityStatus jasutils.ApplicabilityStatus, severity severityutils.Severity, impactedPackagesId string, fixedVersion []string, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) error
 type ParseLicensesFunc func(license services.License, impactedPackagesId string, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) error
 type ParseJasFunc func(run *sarif.Run, rule *sarif.ReportingDescriptor, severity severityutils.Severity, result *sarif.Result, location *sarif.Location) error
-type ParseSbomFunc func(dependency cyclonedx.Dependency, relatedComponent *cyclonedx.Component, isDirect bool) error
+type ParseSbomFunc func(component cyclonedx.Component, relatedDependencies *cyclonedx.Dependency, isDirect bool) error
 
 // Allows to iterate over the provided SARIF runs and call the provided handler for each issue to process it.
 func ForEachJasIssues(runs []*sarif.Run, entitledForJas bool, handler ParseJasFunc) error {
@@ -215,13 +215,22 @@ func ForEachLicenses(target ScanTarget, licenses []services.License, handler Par
 
 // Allows to iterate over the provided SBOM dependencies and call the provided handler for each issue to process it.
 func ForEachSbom(bom *cyclonedx.BOM, handler ParseSbomFunc) (err error) {
-	if handler == nil || bom == nil || bom.Dependencies == nil {
+	if handler == nil || bom == nil || bom.Components == nil {
 		return
 	}
 	directComponentRefs := getDirectComponents(bom)
-	for _, dependency := range *bom.Dependencies {
-		if err := handler(dependency, getRelatedComponent(dependency.Ref, bom.Components), slices.Contains(directComponentRefs, dependency.Ref)); err != nil {
+	for _, component := range *bom.Components {
+		// Handle the main component
+		if err := handler(component, getRelatedDependency(component.BOMRef, bom.Dependencies), slices.Contains(directComponentRefs, component.BOMRef)); err != nil {
 			return err
+		}
+		// Recursively iterate over the component's sub-components
+		if component.Components != nil {
+			for _, dependency := range *component.Components {
+				if err := handler(dependency, getRelatedDependency(dependency.BOMRef, bom.Dependencies), slices.Contains(directComponentRefs, dependency.BOMRef)); err != nil {
+					return err
+				}
+			}
 		}
 	}
 	return
@@ -246,18 +255,34 @@ func getApplicationComponentRefs(bom *cyclonedx.BOM) (applicationComponentRefs [
 		return
 	}
 	// Collect all the 'Application' components from the BOM
-	if bom.Metadata != nil && bom.Metadata.Component != nil {
-		mainComponent := bom.Metadata.Component
-		if mainComponent.Type == cyclonedx.ComponentTypeApplication {
-			applicationComponentRefs = append(applicationComponentRefs, mainComponent.BOMRef)
-		}
-		for _, component := range *mainComponent.Components {
-			if component.Type == cyclonedx.ComponentTypeApplication {
-				applicationComponentRefs = append(applicationComponentRefs, component.BOMRef)
-			}
+	if bom.Metadata == nil || bom.Metadata.Component == nil {
+		return
+	}
+	mainComponent := bom.Metadata.Component
+	if mainComponent.Type == cyclonedx.ComponentTypeApplication {
+		applicationComponentRefs = append(applicationComponentRefs, mainComponent.BOMRef)
+	}
+	if mainComponent.Components == nil {
+		return
+	}
+	for _, component := range *mainComponent.Components {
+		if component.Type == cyclonedx.ComponentTypeApplication {
+			applicationComponentRefs = append(applicationComponentRefs, component.BOMRef)
 		}
 	}
 	return
+}
+
+func getRelatedDependency(bomRef string, dependencies *[]cyclonedx.Dependency) *cyclonedx.Dependency {
+	if dependencies == nil {
+		return nil
+	}
+	for _, dependency := range *dependencies {
+		if dependency.Ref == bomRef {
+			return &dependency
+		}
+	}
+	return nil
 }
 
 func getRelatedComponent(bomRef string, components *[]cyclonedx.Component) *cyclonedx.Component {

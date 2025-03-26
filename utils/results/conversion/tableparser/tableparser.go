@@ -78,23 +78,24 @@ func (tc *CmdResultsTableConverter) ParseSast(target results.ScanTarget, isViola
 }
 
 func (tc *CmdResultsTableConverter) ParseSbom(_ results.ScanTarget, sbom *cyclonedx.BOM) (err error) {
-	return results.ForEachSbom(sbom, func(dependency cyclonedx.Dependency, relatedComponent *cyclonedx.Component, isDirect bool) (e error) {
-		id := dependency.Ref
-		if relatedComponent != nil {
-			id = relatedComponent.PackageURL
+	return results.ForEachSbom(sbom, func(component cyclonedx.Component, relatedDependencies *cyclonedx.Dependency, isDirect bool) (e error) {
+		if component.Type != cyclonedx.ComponentTypeLibrary {
+			// We are only interested in libraries for the Table Sbom
+			return
 		}
-		currName, currVersion, currType := techutils.SplitComponentId(id)
+		id := component.PackageURL
+		currName, currVersion, currType := techutils.SplitPackageURL(id)
 		entry := formats.SbomTableRow{Component: currName, Version: currVersion, PackageType: currType, Relation: getDirectStr(isDirect), Direct: isDirect}
-		if parsedEntry, exists := tc.sbomInfo[dependency.Ref]; exists {
+		if parsedEntry, exists := tc.sbomInfo[id]; exists {
 			if entry.Direct && !parsedEntry.Direct {
 				// If the new entry is direct, we want to override the existing entry
-				tc.sbomInfo[dependency.Ref] = entry
+				tc.sbomInfo[id] = entry
 			}
 			// No need to add the entry again
 			return
 		}
 		// The entry does not exist, we want to add it
-		tc.sbomInfo[dependency.Ref] = entry
+		tc.sbomInfo[id] = entry
 		return
 	})
 }
