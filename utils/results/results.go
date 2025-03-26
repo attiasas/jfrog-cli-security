@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/CycloneDX/cyclonedx-go"
 	"github.com/jfrog/gofrog/datastructures"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
@@ -90,25 +91,9 @@ type ScaScanResults struct {
 	// Target of the scan
 	Descriptors []string `json:"descriptors,omitempty"`
 	// Sbom
-	TargetSbom Sbom `json:"sbom,omitempty"`
+	Sbom *cyclonedx.BOM `json:"sbom,omitempty"`
 	// Sca scan results
 	XrayResults []ScanResult[services.ScanResponse] `json:"xray_scan,omitempty"`
-}
-
-// Software Bill of Materials (SBOM) is a structured list of components in a piece of software.
-type Sbom struct {
-	Components []SbomEntry `json:"components,omitempty"`
-}
-type SbomEntry struct {
-	Component string `json:"component"`
-	Version   string `json:"version"`
-	Type      string `json:"type"`
-	// Direct dependency or transitive dependency
-	Direct bool `json:"direct"`
-}
-
-func (se SbomEntry) String() string {
-	return fmt.Sprintf("%s:%s (%s)", se.Component, se.Version, se.Type)
 }
 
 type JasScansResults struct {
@@ -435,15 +420,19 @@ func (sr *TargetResults) SetDescriptors(descriptors ...string) *TargetResults {
 	return sr
 }
 
-func (sr *TargetResults) NewScaScanResults(errorCode int, sbom Sbom, responses ...services.ScanResponse) *ScaScanResults {
+func (sr *TargetResults) NewScaScanResults(errorCode int, responses ...services.ScanResponse) *ScaScanResults {
 	if sr.ScaResults == nil {
 		sr.ScaResults = &ScaScanResults{}
 	}
-	sr.ScaResults.TargetSbom = sbom
 	for _, response := range responses {
 		sr.ScaResults.XrayResults = append(sr.ScaResults.XrayResults, ScanResult[services.ScanResponse]{Scan: response, StatusCode: errorCode})
 	}
 	return sr.ScaResults
+}
+
+func (ssr *ScaScanResults) SetSbom(sbom *cyclonedx.BOM) *ScaScanResults {
+	ssr.Sbom = sbom
+	return ssr
 }
 
 func (ssr *ScaScanResults) HasInformation() bool {

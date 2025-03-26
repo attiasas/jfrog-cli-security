@@ -4,12 +4,14 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
-	"sort"
+
+	// "sort"
 	"strconv"
 	"strings"
 
-	"golang.org/x/exp/maps"
+	// "golang.org/x/exp/maps"
 
+	"github.com/CycloneDX/cyclonedx-go"
 	"github.com/jfrog/gofrog/datastructures"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-security/utils"
@@ -21,7 +23,8 @@ import (
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/jfrog/jfrog-client-go/xray/services"
-	xrayCmdUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
+
+	// xrayCmdUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 	"github.com/owenrumney/go-sarif/v2/sarif"
 	"golang.org/x/exp/slices"
 )
@@ -55,13 +58,14 @@ func CheckIfFailBuild(results []services.ScanResponse) bool {
 	return false
 }
 
-type ParseScaVulnerabilityFunc func(vulnerability services.Vulnerability, cves []formats.CveRow, applicabilityStatus jasutils.ApplicabilityStatus, severity severityutils.Severity, impactedPackagesName, impactedPackagesVersion, impactedPackagesType string, fixedVersion []string, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) error
-type ParseScaViolationFunc func(violation services.Violation, cves []formats.CveRow, applicabilityStatus jasutils.ApplicabilityStatus, severity severityutils.Severity, impactedPackagesName, impactedPackagesVersion, impactedPackagesType string, fixedVersion []string, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) error
-type ParseLicensesFunc func(license services.License, impactedPackagesName, impactedPackagesVersion, impactedPackagesType string, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) error
+type ParseScaVulnerabilityFunc func(vulnerability services.Vulnerability, cves []formats.CveRow, applicabilityStatus jasutils.ApplicabilityStatus, severity severityutils.Severity, impactedPackagesId string, fixedVersion []string, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) error
+type ParseScaViolationFunc func(violation services.Violation, cves []formats.CveRow, applicabilityStatus jasutils.ApplicabilityStatus, severity severityutils.Severity, impactedPackagesId string, fixedVersion []string, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) error
+type ParseLicensesFunc func(license services.License, impactedPackagesId string, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) error
 type ParseJasFunc func(run *sarif.Run, rule *sarif.ReportingDescriptor, severity severityutils.Severity, result *sarif.Result, location *sarif.Location) error
+type ParseSbomFunc func(dependency cyclonedx.Dependency, relatedComponent *cyclonedx.Component, isDirect bool) error
 
 // Allows to iterate over the provided SARIF runs and call the provided handler for each issue to process it.
-func ApplyHandlerToJasIssues(runs []*sarif.Run, entitledForJas bool, handler ParseJasFunc) error {
+func ForEachJasIssues(runs []*sarif.Run, entitledForJas bool, handler ParseJasFunc) error {
 	if !entitledForJas || handler == nil {
 		return nil
 	}
@@ -92,13 +96,13 @@ func ApplyHandlerToJasIssues(runs []*sarif.Run, entitledForJas bool, handler Par
 	return nil
 }
 
-// ApplyHandlerToScaVulnerabilities allows to iterate over the provided SCA security vulnerabilities and call the provided handler for each impacted component/package with a vulnerability to process it.
-func ApplyHandlerToScaVulnerabilities(target ScanTarget, vulnerabilities []services.Vulnerability, entitledForJas bool, applicabilityRuns []*sarif.Run, handler ParseScaVulnerabilityFunc) error {
+// ForEachScaVulnerabilities allows to iterate over the provided SCA security vulnerabilities and call the provided handler for each impacted component/package with a vulnerability to process it.
+func ForEachScaVulnerabilities(target ScanTarget, vulnerabilities []services.Vulnerability, entitledForJas bool, applicabilityRuns []*sarif.Run, handler ParseScaVulnerabilityFunc) error {
 	if handler == nil {
 		return nil
 	}
 	for _, vulnerability := range vulnerabilities {
-		impactedPackagesNames, impactedPackagesVersions, impactedPackagesTypes, fixedVersions, directComponents, impactPaths, err := SplitComponents(target.Target, vulnerability.Components)
+		impactedPackagesIds, fixedVersions, directComponents, impactPaths, err := SplitComponents(target.Target, vulnerability.Components)
 		if err != nil {
 			return err
 		}
@@ -107,12 +111,8 @@ func ApplyHandlerToScaVulnerabilities(target ScanTarget, vulnerabilities []servi
 		if err != nil {
 			return err
 		}
-		for compIndex := 0; compIndex < len(impactedPackagesNames); compIndex++ {
-			if err := handler(
-				vulnerability, cves, applicabilityStatus, severity,
-				impactedPackagesNames[compIndex], impactedPackagesVersions[compIndex], impactedPackagesTypes[compIndex],
-				fixedVersions[compIndex], directComponents[compIndex], impactPaths[compIndex],
-			); err != nil {
+		for compIndex := 0; compIndex < len(impactedPackagesIds); compIndex++ {
+			if err := handler(vulnerability, cves, applicabilityStatus, severity, impactedPackagesIds[compIndex], fixedVersions[compIndex], directComponents[compIndex], impactPaths[compIndex]); err != nil {
 				return err
 			}
 		}
@@ -121,7 +121,7 @@ func ApplyHandlerToScaVulnerabilities(target ScanTarget, vulnerabilities []servi
 }
 
 // Allows to iterate over the provided SCA violations and call the provided handler for each impacted component/package with a violation to process it.
-func ApplyHandlerToScaViolations(target ScanTarget, violations []services.Violation, entitledForJas bool, applicabilityRuns []*sarif.Run, securityHandler ParseScaViolationFunc, licenseHandler ParseScaViolationFunc, operationalRiskHandler ParseScaViolationFunc) (watches []string, failBuild bool, err error) {
+func ForEachScaViolations(target ScanTarget, violations []services.Violation, entitledForJas bool, applicabilityRuns []*sarif.Run, securityHandler ParseScaViolationFunc, licenseHandler ParseScaViolationFunc, operationalRiskHandler ParseScaViolationFunc) (watches []string, failBuild bool, err error) {
 	if securityHandler == nil && licenseHandler == nil && operationalRiskHandler == nil {
 		return
 	}
@@ -131,7 +131,7 @@ func ApplyHandlerToScaViolations(target ScanTarget, violations []services.Violat
 		watchesSet.Add(violation.WatchName)
 		failBuild = failBuild || violation.FailBuild
 		// Prepare violation information
-		impactedPackagesNames, impactedPackagesVersions, impactedPackagesTypes, fixedVersions, directComponents, impactPaths, e := SplitComponents(target.Target, violation.Components)
+		impactedPackagesIds, fixedVersions, directComponents, impactPaths, e := SplitComponents(target.Target, violation.Components)
 		if e != nil {
 			err = errors.Join(err, e)
 			continue
@@ -156,12 +156,8 @@ func ApplyHandlerToScaViolations(target ScanTarget, violations []services.Violat
 				continue
 			}
 
-			for compIndex := 0; compIndex < len(impactedPackagesNames); compIndex++ {
-				if e := securityHandler(
-					violation, cves, applicabilityStatus, severity,
-					impactedPackagesNames[compIndex], impactedPackagesVersions[compIndex], impactedPackagesTypes[compIndex],
-					fixedVersions[compIndex], directComponents[compIndex], impactPaths[compIndex],
-				); e != nil {
+			for compIndex := 0; compIndex < len(impactedPackagesIds); compIndex++ {
+				if e := securityHandler(violation, cves, applicabilityStatus, severity, impactedPackagesIds[compIndex], fixedVersions[compIndex], directComponents[compIndex], impactPaths[compIndex]); e != nil {
 					err = errors.Join(err, e)
 					continue
 				}
@@ -171,16 +167,12 @@ func ApplyHandlerToScaViolations(target ScanTarget, violations []services.Violat
 				// No handler was provided for license violations
 				continue
 			}
-			for compIndex := 0; compIndex < len(impactedPackagesNames); compIndex++ {
-				if impactedPackagesNames[compIndex] == "root" {
+			for compIndex := 0; compIndex < len(impactedPackagesIds); compIndex++ {
+				if impactedPackagesName, _, _ := techutils.SplitComponentId(impactedPackagesIds[compIndex]); impactedPackagesName == "root" {
 					// No Need to output 'root' as impacted package for license since we add this as the root node for the scan
 					continue
 				}
-				if e := licenseHandler(
-					violation, cves, applicabilityStatus, severity,
-					impactedPackagesNames[compIndex], impactedPackagesVersions[compIndex], impactedPackagesTypes[compIndex],
-					fixedVersions[compIndex], directComponents[compIndex], impactPaths[compIndex],
-				); e != nil {
+				if e := licenseHandler(violation, cves, applicabilityStatus, severity, impactedPackagesIds[compIndex], fixedVersions[compIndex], directComponents[compIndex], impactPaths[compIndex]); e != nil {
 					err = errors.Join(err, e)
 					continue
 				}
@@ -190,12 +182,8 @@ func ApplyHandlerToScaViolations(target ScanTarget, violations []services.Violat
 				// No handler was provided for operational risk violations
 				continue
 			}
-			for compIndex := 0; compIndex < len(impactedPackagesNames); compIndex++ {
-				if e := operationalRiskHandler(
-					violation, cves, applicabilityStatus, severity,
-					impactedPackagesNames[compIndex], impactedPackagesVersions[compIndex], impactedPackagesTypes[compIndex],
-					fixedVersions[compIndex], directComponents[compIndex], impactPaths[compIndex],
-				); e != nil {
+			for compIndex := 0; compIndex < len(impactedPackagesIds); compIndex++ {
+				if e := operationalRiskHandler(violation, cves, applicabilityStatus, severity, impactedPackagesIds[compIndex], fixedVersions[compIndex], directComponents[compIndex], impactPaths[compIndex]); e != nil {
 					err = errors.Join(err, e)
 					continue
 				}
@@ -206,20 +194,18 @@ func ApplyHandlerToScaViolations(target ScanTarget, violations []services.Violat
 	return
 }
 
-// ApplyHandlerToLicenses allows to iterate over the provided licenses and call the provided handler for each component/package with a license to process it.
-func ApplyHandlerToLicenses(target ScanTarget, licenses []services.License, handler ParseLicensesFunc) error {
+// ForEachLicenses allows to iterate over the provided licenses and call the provided handler for each component/package with a license to process it.
+func ForEachLicenses(target ScanTarget, licenses []services.License, handler ParseLicensesFunc) error {
 	if handler == nil {
 		return nil
 	}
 	for _, license := range licenses {
-		impactedPackagesNames, impactedPackagesVersions, impactedPackagesTypes, _, directComponents, impactPaths, err := SplitComponents(target.Target, license.Components)
+		impactedPackagesIds, _, directComponents, impactPaths, err := SplitComponents(target.Target, license.Components)
 		if err != nil {
 			return err
 		}
-		for compIndex := 0; compIndex < len(impactedPackagesNames); compIndex++ {
-			if err := handler(
-				license, impactedPackagesNames[compIndex], impactedPackagesVersions[compIndex], impactedPackagesTypes[compIndex], directComponents[compIndex], impactPaths[compIndex],
-			); err != nil {
+		for compIndex := 0; compIndex < len(impactedPackagesIds); compIndex++ {
+			if err := handler(license, impactedPackagesIds[compIndex], directComponents[compIndex], impactPaths[compIndex]); err != nil {
 				return err
 			}
 		}
@@ -227,16 +213,71 @@ func ApplyHandlerToLicenses(target ScanTarget, licenses []services.License, hand
 	return nil
 }
 
-func SplitComponents(target string, impactedPackages map[string]services.Component) (impactedPackagesNames, impactedPackagesVersions, impactedPackagesTypes []string, fixedVersions [][]string, directComponents [][]formats.ComponentRow, impactPaths [][][]formats.ComponentRow, err error) {
+// Allows to iterate over the provided SBOM dependencies and call the provided handler for each issue to process it.
+func ForEachSbom(bom *cyclonedx.BOM, handler ParseSbomFunc) (err error) {
+	if handler == nil || bom == nil || bom.Dependencies == nil {
+		return
+	}
+	directComponentRefs := getDirectComponents(bom)
+	for _, dependency := range *bom.Dependencies {
+		if err := handler(dependency, getRelatedComponent(dependency.Ref, bom.Components), slices.Contains(directComponentRefs, dependency.Ref)); err != nil {
+			return err
+		}
+	}
+	return
+}
+
+func getDirectComponents(bom *cyclonedx.BOM) (directComponentRefs []string) {
+	if bom == nil || bom.Dependencies == nil {
+		return
+	}
+	applicationRefs := getApplicationComponentRefs(bom)
+	// Collect all the direct dependencies of the 'Application' components
+	for _, dependency := range *bom.Dependencies {
+			directComponentRefs = append(directComponentRefs, *dependency.Dependencies...)
+		}
+	}
+	return directComponentRefs
+}
+
+func getApplicationComponentRefs(bom *cyclonedx.BOM) (applicationComponentRefs []string) {
+	if bom == nil || bom.Components == nil {
+		return
+	}
+	// Collect all the 'Application' components from the BOM
+	if bom.Metadata != nil && bom.Metadata.Component != nil {
+		mainComponent := bom.Metadata.Component
+		if mainComponent.Type == cyclonedx.ComponentTypeApplication {
+			applicationComponentRefs = append(applicationComponentRefs, mainComponent.BOMRef)
+		}
+		for _, component := range *mainComponent.Components {
+			if component.Type == cyclonedx.ComponentTypeApplication {
+				applicationComponentRefs = append(applicationComponentRefs, component.BOMRef)
+			}
+		}
+	}
+	return
+}
+
+func getRelatedComponent(bomRef string, components *[]cyclonedx.Component) *cyclonedx.Component {
+	if components == nil {
+		return nil
+	}
+	for _, component := range *components {
+		if component.BOMRef == bomRef {
+			return &component
+		}
+	}
+	return nil
+}
+
+func SplitComponents(target string, impactedPackages map[string]services.Component) (impactedPackagesIds []string, fixedVersions [][]string, directComponents [][]formats.ComponentRow, impactPaths [][][]formats.ComponentRow, err error) {
 	if len(impactedPackages) == 0 {
 		err = errorutils.CheckErrorf("failed while parsing the response from Xray: violation doesn't have any components")
 		return
 	}
 	for currCompId, currComp := range impactedPackages {
-		currCompName, currCompVersion, currCompType := techutils.SplitComponentId(currCompId)
-		impactedPackagesNames = append(impactedPackagesNames, currCompName)
-		impactedPackagesVersions = append(impactedPackagesVersions, currCompVersion)
-		impactedPackagesTypes = append(impactedPackagesTypes, currCompType)
+		impactedPackagesIds = append(impactedPackagesIds, currCompId)
 		fixedVersions = append(fixedVersions, currComp.FixedVersions)
 		currDirectComponents, currImpactPaths := getDirectComponentsAndImpactPaths(target, currComp.ImpactPaths)
 		directComponents = append(directComponents, currDirectComponents)
@@ -690,97 +731,105 @@ func shouldSkipNotApplicable(violation services.Violation, applicabilityStatus j
 	return true, nil
 }
 
-func CompTreeToSbom(graph *xrayCmdUtils.BinaryGraphNode) (sbom Sbom) {
-	if graph == nil {
-		return
-	}
-	// Recursively parse the tree
-	parsed := map[string]SbomEntry{}
-	if strings.HasSuffix(graph.Path, ".rpm") {
-		// For rmp package manager, root is also included in the graph
-		parseBinaryNode(graph, parsed, true)
-	} else {
-		for _, node := range graph.Nodes {
-			parseBinaryNode(node, parsed, true)
-		}
-	}
+// func CompTreeToSbom(graph *xrayCmdUtils.BinaryGraphNode) (sbom Sbom) {
+// 	if graph == nil {
+// 		return
+// 	}
+// 	// Recursively parse the tree
+// 	parsed := map[string]SbomEntry{}
+// 	if strings.HasSuffix(graph.Path, ".rpm") {
+// 		// For rmp package manager, root is also included in the graph
+// 		parseBinaryNode(graph, parsed, true)
+// 	} else {
+// 		for _, node := range graph.Nodes {
+// 			parseBinaryNode(node, parsed, true)
+// 		}
+// 	}
 
-	sbom.Components = maps.Values(parsed)
-	return
-}
+// 	sbom.Components = maps.Values(parsed)
+// 	return
+// }
 
-func DepTreeToSbom(fullDepTrees []*xrayCmdUtils.GraphNode) (sbom Sbom) {
-	if len(fullDepTrees) == 0 {
-		// No dependencies
-		return
-	}
-	parsed := map[string]SbomEntry{}
-	// Recursively parse the tree
-	for _, projectTree := range fullDepTrees {
-		// First node is the root (project node), skip it
-		for _, directNode := range projectTree.Nodes {
-			// First node is direct, the rest are transitive
-			parseNode(directNode, parsed, true)
-		}
-	}
-	sbom.Components = maps.Values(parsed)
-	return
-}
+// func DepTreeToSbom(fullDepTrees []*xrayCmdUtils.GraphNode) (sbom Sbom) {
+// 	if len(fullDepTrees) == 0 {
+// 		// No dependencies
+// 		return
+// 	}
+// 	parsed := map[string]SbomEntry{}
+// 	// Recursively parse the tree
+// 	for _, projectTree := range fullDepTrees {
+// 		// First node is the root (project node), skip it
+// 		for _, directNode := range projectTree.Nodes {
+// 			// First node is direct, the rest are transitive
+// 			parseNode(directNode, parsed, true)
+// 		}
+// 	}
+// 	sbom.Dependencies = maps.Values(parsed)
+// 	return
+// }
 
-func parseNode(node *xrayCmdUtils.GraphNode, parsed map[string]SbomEntry, direct bool) {
-	if parsedEntry, exists := parsed[node.Id]; exists {
-		// Node is parsed already, if it's direct, update the flag (can be indirect from another dep, but also direct at the project level)
-		if direct {
-			parsedEntry.Direct = true
-			parsed[node.Id] = parsedEntry
-		}
-		return
-	}
-	// If the node is not parsed yet, parse it and its children
-	component, version, packageType := techutils.SplitComponentId(node.Id)
-	entry := SbomEntry{Component: component, Version: version, Type: packageType, Direct: direct}
-	parsed[node.Id] = entry
-	for _, child := range node.Nodes {
-		parseNode(child, parsed, false)
-	}
-}
+// func parseNode(node *xrayCmdUtils.GraphNode, parsed map[string]SbomEntry, direct bool) {
+// 	if parsedEntry, exists := parsed[node.Id]; exists {
+// 		// Node is parsed already, if it's direct, update the flag (can be indirect from another dep, but also direct at the project level)
+// 		if direct {
+// 			parsedEntry.Direct = true
+// 			parsed[node.Id] = parsedEntry
+// 		}
+// 		return
+// 	}
+// 	// If the node is not parsed yet, parse it and its children
+// 	component, version, packageType := techutils.SplitComponentId(node.Id)
+// 	entry := SbomEntry{Id: node.Id, Name: component, Version: version, Type: packageType, Direct: direct, DependsOn: getDirectChildren(node)}
+// 	parsed[node.Id] = entry
+// 	for _, child := range node.Nodes {
+// 		parseNode(child, parsed, false)
+// 	}
+// }
 
-func parseBinaryNode(node *xrayCmdUtils.BinaryGraphNode, parsed map[string]SbomEntry, direct bool) {
-	if parsedEntry, exists := parsed[node.Id]; exists {
-		// Node is parsed already, if it's direct, update the flag (can be indirect from another dep, but also direct at the project level)
-		if direct {
-			parsedEntry.Direct = true
-			parsed[node.Id] = parsedEntry
-		}
-		return
-	}
-	// If the node is not parsed yet, parse it and its children
-	component, version, packageType := techutils.SplitComponentId(node.Id)
-	if version != "" {
-		// For docker images, binary graph also contains layer information not relevant for the sbom
-		entry := SbomEntry{Component: component, Version: version, Type: packageType, Direct: direct}
-		parsed[node.Id] = entry
-	}
-	for _, child := range node.Nodes {
-		parseBinaryNode(child, parsed, false)
-	}
-}
+// func getDirectChildren(node *xrayCmdUtils.GraphNode) []string {
+// 	var children []string
+// 	for _, child := range node.Nodes {
+// 		children = append(children, child.Id)
+// 	}
+// 	return children
+// }
 
-func SortSbom(components []SbomEntry) {
-	sort.Slice(components, func(i, j int) bool {
-		if components[i].Direct == components[j].Direct {
-			if components[i].Component == components[j].Component {
-				if components[i].Version == components[j].Version {
-					// Last order by type
-					return components[i].Type < components[j].Type
-				}
-				// Third order by version
-				return components[i].Version < components[j].Version
-			}
-			// Second order by component
-			return components[i].Component < components[j].Component
-		}
-		// First order by direct components
-		return components[i].Direct
-	})
-}
+// func parseBinaryNode(node *xrayCmdUtils.BinaryGraphNode, parsed map[string]SbomEntry, direct bool) {
+// 	if parsedEntry, exists := parsed[node.Id]; exists {
+// 		// Node is parsed already, if it's direct, update the flag (can be indirect from another dep, but also direct at the project level)
+// 		if direct {
+// 			parsedEntry.Direct = true
+// 			parsed[node.Id] = parsedEntry
+// 		}
+// 		return
+// 	}
+// 	// If the node is not parsed yet, parse it and its children
+// 	component, version, packageType := techutils.SplitComponentId(node.Id)
+// 	if version != "" {
+// 		// For docker images, binary graph also contains layer information not relevant for the sbom
+// 		entry := SbomEntry{Name: component, Version: version, Type: packageType, Direct: direct}
+// 		parsed[node.Id] = entry
+// 	}
+// 	for _, child := range node.Nodes {
+// 		parseBinaryNode(child, parsed, false)
+// 	}
+// }
+
+// func SortSbom(components []SbomEntry) {
+// 	sort.Slice(components, func(i, j int) bool {
+// 		if components[i].Direct == components[j].Direct {
+// 			if components[i].Name == components[j].Name {
+// 				if components[i].Version == components[j].Version {
+// 					// Last order by type
+// 					return components[i].Type < components[j].Type
+// 				}
+// 				// Third order by version
+// 				return components[i].Version < components[j].Version
+// 			}
+// 			// Second order by component
+// 			return components[i].Name < components[j].Name
+// 		}
+// 		// First order by direct components
+// 		return components[i].Direct
+// 	})
+// }
