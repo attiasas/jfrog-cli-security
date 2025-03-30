@@ -3,6 +3,7 @@ package output
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/jfrog/jfrog-cli-core/v2/common/format"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
@@ -166,7 +167,11 @@ func (rw *ResultsWriter) printCycloneDx() error {
 	if err != nil {
 		return err
 	}
-	file, err := os.Create("/Users/assafa/Documents/code/jfrog-projects/jfrog-cli-security/bom.json")
+	cwd, err := os.Getwd()
+	if err != nil {
+		return errorutils.CheckError(err)
+	}
+	file, err := os.Create(filepath.Join(cwd, "bom.json"))
 	if err != nil {
 		return errorutils.CheckError(err)
 	}
