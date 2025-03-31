@@ -1,4 +1,4 @@
-package sca
+package bom
 
 import (
 	"github.com/CycloneDX/cyclonedx-go"
@@ -18,17 +18,6 @@ func DepsTreeToSbom(trees ...*xrayUtils.GraphNode) (sbom *cyclonedx.BOM) {
 	for _, tree := range trees {
 		parseDepsTreeToBOM(tree, sbom, parsed)
 	}
-	// 	compName, compVersion, compType := techutils.SplitComponentId(tree.Id)
-	// 	applicationRef := techutils.ToPackageUrl(compName, compVersion, compType)
-	// 	applicationComponent := cyclonedx.Component{BOMRef: applicationRef, PackageURL: applicationRef, Type: cyclonedx.ComponentTypeApplication}
-
-	// 	for _, node := range tree.Nodes {
-	// 		// Extract the component name, version and type from the Xray component id
-	// 		compName, compVersion, compType := techutils.SplitXrayComponentId(node.Id)
-	// 		// Create a new component and add it to the sbom
-	// 		sbom.AddComponent(cyclonedx.NewComponent(compName, compVersion, compType))
-	// 	}
-
 	return
 }
 

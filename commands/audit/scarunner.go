@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/jfrog/jfrog-cli-security/commands/audit/sca/swift"
+	"github.com/jfrog/jfrog-cli-security/sca/bom"
 
 	biutils "github.com/jfrog/build-info-go/utils"
 	"github.com/jfrog/build-info-go/utils/pythonutils"
@@ -28,7 +29,6 @@ import (
 	"github.com/jfrog/jfrog-cli-security/commands/audit/sca/pnpm"
 	"github.com/jfrog/jfrog-cli-security/commands/audit/sca/python"
 	"github.com/jfrog/jfrog-cli-security/commands/audit/sca/yarn"
-	"github.com/jfrog/jfrog-cli-security/sca"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	xrayutils "github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/artifactory"
@@ -139,7 +139,7 @@ func executeScaScanTask(auditParallelRunner *utils.SecurityParallelRunner, serve
 		auditParallelRunner.ResultsMu.Lock()
 		defer auditParallelRunner.ResultsMu.Unlock()
 		// We add the results before checking for errors, so we can display the results even if an error occurred.
-		scan.NewScaScanResults(auditSca.GetScaScansStatusCode(xrayErr, scanResults...), scanResults...).SetSbom(sca.DepsTreeToSbom(treeResult.FullDepTrees...)).IsMultipleRootProject = clientutils.Pointer(len(treeResult.FullDepTrees) > 1)
+		scan.NewScaScanResults(auditSca.GetScaScansStatusCode(xrayErr, scanResults...), scanResults...).SetSbom(bom.DepsTreeToSbom(treeResult.FullDepTrees...)).IsMultipleRootProject = clientutils.Pointer(len(treeResult.FullDepTrees) > 1)
 		addThirdPartyDependenciesToParams(auditParams, scan.Technology, treeResult.FlatTree, treeResult.FullDepTrees)
 
 		if xrayErr != nil {

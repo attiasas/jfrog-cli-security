@@ -1,4 +1,4 @@
-package sca
+package bom
 
 // import (
 // 	"testing"

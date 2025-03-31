@@ -20,7 +20,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/jas/applicability"
 	"github.com/jfrog/jfrog-cli-security/jas/runner"
 	"github.com/jfrog/jfrog-cli-security/jas/secrets"
-	"github.com/jfrog/jfrog-cli-security/sca"
+	"github.com/jfrog/jfrog-cli-security/sca/bom"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/results/output"
 	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
@@ -465,7 +465,7 @@ func (scanCmd *ScanCommand) createIndexerHandlerFunc(file *spec.File, cmdResults
 				if err != nil {
 					return targetResults.AddTargetError(fmt.Errorf("%s sca scanning '%s' failed with error: %s", scanLogPrefix, graph.Id, err.Error()), false)
 				} else {
-					targetResults.NewScaScanResults(auditSca.GetScaScansStatusCode(err, *graphScanResults), *graphScanResults).SetSbom(sca.CompTreeToSbom(graph))
+					targetResults.NewScaScanResults(auditSca.GetScaScansStatusCode(err, *graphScanResults), *graphScanResults).SetSbom(bom.CompTreeToSbom(graph))
 					targetResults.Technology = techutils.Technology(graphScanResults.ScannedPackageType)
 				}
 				if !cmdResults.EntitledForJas {
