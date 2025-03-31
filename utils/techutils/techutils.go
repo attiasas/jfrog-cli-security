@@ -3,6 +3,7 @@ package techutils
 import (
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -12,6 +13,8 @@ import (
 	"golang.org/x/exp/maps"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
+
+	"github.com/package-url/packageurl-go"
 
 	"github.com/jfrog/gofrog/datastructures"
 	"github.com/jfrog/jfrog-cli-core/v2/common/project"
@@ -755,8 +758,7 @@ func SplitComponentIdRaw(componentId string) (string, string, string) {
 	return compName, compVersion, packageType
 }
 
-// A purl is a URL composed of seven components: scheme:type/namespace/name@version?qualifiers#subpath
-// This function splits a purl to the component name, version and package type.
+// Parse a given Package URL (purl) and return the component name, version, and package type.
 // Examples:
 //  1. purl: "pkg:golang/github.com/gophish/gophish@v0.1.2"
 //     Returned values:
@@ -768,32 +770,23 @@ func SplitComponentIdRaw(componentId string) (string, string, string) {
 //     Component name: "github.com/go-gitea/gitea"
 //     Component version: ""
 //     Package type: "golang"
+//  3. purl: "pkg:gav/xpp3:xpp3_min@1.1.4c"
+//     Returned values:
+//     Component name: "xpp3:xpp3_min"
+//     Component version: "1.1.4c"
+//     Package type: "gav"
 func SplitPackageURL(purl string) (compName, compVersion, packageType string) {
-	// Make sure the purl is the correct scheme
-	idParts := strings.Split(purl, ":")
-	if len(idParts) != 2 || idParts[0] != "pkg" {
+	parsed, err := packageurl.FromString(purl)
+	if err != nil {
+		log.Debug(fmt.Sprintf("Failed to parse package URL: %s", err))
 		return purl, "", ""
 	}
-	// Split the package type and the component ID by the first '/'
-	compIdParts := strings.SplitN(idParts[1], "/", 2)
-	if len(compIdParts) != 2 {
-		return purl, "", ""
+	compName = parsed.Name
+	if parsed.Namespace != "" {
+		compName = parsed.Namespace + "/" + compName
 	}
-	packageType = compIdParts[0]
-	compId := compIdParts[1]
-	// Split the component ID by the '@' character
-	compIdParts = strings.SplitN(compId, "@", 2)
-	compName = compIdParts[0]
-	if len(compIdParts) == 2 {
-		// get the version str only
-		compVersion = compIdParts[1]
-		if strings.Contains(compVersion, "?") {
-			compVersion = strings.Split(compVersion, "?")[0]
-		}
-		if strings.Contains(compVersion, "#") {
-			compVersion = strings.Split(compVersion, "#")[0]
-		}
-	}
+	compVersion = parsed.Version
+	packageType = parsed.Type
 	return
 }
 
@@ -806,9 +799,13 @@ func ToXrayComponentId(compName, version, packageType string) (output string) {
 }
 
 func ToPackageUrl(compName, version, packageType string) (output string) {
-	output = fmt.Sprintf("pkg:%s/%s", packageType, compName)
-	if version != "" {
-		output += fmt.Sprintf("@%s", version)
+	purl := packageurl.NewPackageURL(packageType, "", compName, version, nil, "").String()
+	// Unescape the output
+	output, err := url.QueryUnescape(purl)
+	if err != nil {
+		log.Debug(fmt.Sprintf("Failed to unescape package URL: %s", err))
+		// Return the original output
+		return purl
 	}
-	return
+	return 
 }
