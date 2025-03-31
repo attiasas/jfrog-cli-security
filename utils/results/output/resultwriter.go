@@ -109,6 +109,9 @@ func (rw *ResultsWriter) PrintScanResults() error {
 
 	switch rw.format {
 	case format.Table:
+		if err := rw.saveCycloneDx(); err != nil {
+			return err
+		}
 		return rw.printTables()
 	case format.SimpleJson:
 		// Helper for Debugging purposes, print the raw results to the log
@@ -159,6 +162,25 @@ func (rw *ResultsWriter) printSarif() error {
 	callback := log.SetAllowEmojiFlagWithCallback(true)
 	log.Output(sarifFile)
 	callback()
+	return nil
+}
+
+func (rw *ResultsWriter) saveCycloneDx() error {
+	bom, err := rw.createResultsConvertor(true).ConvertToCycloneDx(rw.commandResults)
+	if err != nil {
+		return err
+	}
+	cwd, err := os.Getwd()
+	if err != nil {
+		return errorutils.CheckError(err)
+	}
+	file, err := os.Create(filepath.Join(cwd, "bom.json"))
+	if err != nil {
+		return errorutils.CheckError(err)
+	}
+	if err = cyclonedx.NewBOMEncoder(file, cyclonedx.BOMFileFormatJSON).SetPretty(true).Encode(bom); err != nil {
+		return err
+	}
 	return nil
 }
 
