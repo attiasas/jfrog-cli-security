@@ -21,6 +21,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/jfrog/jfrog-cli-security/utils/xray/scangraph"
 	"github.com/jfrog/jfrog-cli-security/utils/xsc"
+	// scaRunner "github.com/jfrog/jfrog-cli-security/sca"
 	"golang.org/x/exp/slices"
 
 	xrayutils "github.com/jfrog/jfrog-cli-security/utils/xray"
@@ -256,6 +257,9 @@ func RunAudit(auditParams *AuditParams) (cmdResults *results.SecurityCommandResu
 		auditParams.Progress().SetHeadlineMsg("Scanning for issues")
 	}
 	// The sca scan doesn't require the analyzer manager, so it can run separately from the analyzer manager download routine.
+	// if generalScaScanError := scaRunner.RunScaScans(auditParallelRunner, auditParams, cmdResults); generalScaScanError != nil {
+	// 	cmdResults.AddGeneralError(fmt.Errorf("error has occurred during SCA scan process. SCA scan is skipped for the following directories: %s\n%s", strings.Join(cmdResults.GetTargetsPaths(), ","), generalScaScanError.Error()), auditParams.AllowPartialResults())
+	// }
 	if generalScaScanError := buildDepTreeAndRunScaScan(auditParallelRunner, auditParams, cmdResults); generalScaScanError != nil {
 		cmdResults.AddGeneralError(fmt.Errorf("error has occurred during SCA scan process. SCA scan is skipped for the following directories: %s\n%s", strings.Join(cmdResults.GetTargetsPaths(), ","), generalScaScanError.Error()), auditParams.AllowPartialResults())
 	}
