@@ -465,7 +465,8 @@ func (scanCmd *ScanCommand) createIndexerHandlerFunc(file *spec.File, cmdResults
 				if err != nil {
 					return targetResults.AddTargetError(fmt.Errorf("%s sca scanning '%s' failed with error: %s", scanLogPrefix, graph.Id, err.Error()), false)
 				} else {
-					targetResults.NewScaScanResults(auditSca.GetScaScansStatusCode(err, *graphScanResults), *graphScanResults).SetSbom(bom.CompTreeToSbom(graph))
+					targetResults.NewScaScanResults(auditSca.GetScaScansStatusCode(err, *graphScanResults), *graphScanResults)
+					targetResults.SetSbom(bom.CompTreeToSbom(graph))
 					targetResults.Technology = techutils.Technology(graphScanResults.ScannedPackageType)
 				}
 				if !cmdResults.EntitledForJas {

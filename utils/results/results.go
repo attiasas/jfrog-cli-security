@@ -58,7 +58,7 @@ type ResultContext struct {
 	// If requested, the results will include licenses
 	IncludeLicenses bool `json:"include_licenses"`
 	// If requested, the results will include sbom
-	IncludeSbom bool `json:"include_sbom,omitempty"`
+	IncludeSbom bool `json:"include_sbom"`
 	// The active watches defined on the project_key and git_repository values above that were fetched from the platform
 	PlatformWatches *xrayApi.ResourcesWatchesBody `json:"platform_watches,omitempty"`
 }
@@ -69,6 +69,8 @@ func (rc *ResultContext) HasViolationContext() bool {
 
 type TargetResults struct {
 	ScanTarget
+	// Sbom
+	Sbom *cyclonedx.BOM `json:"sbom,omitempty"`
 	// All scan results for the target
 	ScaResults *ScaScanResults  `json:"sca_scans,omitempty"`
 	JasResults *JasScansResults `json:"jas_scans,omitempty"`
@@ -90,8 +92,6 @@ type ScaScanResults struct {
 	IsMultipleRootProject *bool `json:"is_multiple_root_project,omitempty"`
 	// Target of the scan
 	Descriptors []string `json:"descriptors,omitempty"`
-	// Sbom
-	Sbom *cyclonedx.BOM `json:"sbom,omitempty"`
 	// Sca scan results
 	XrayResults []ScanResult[services.ScanResponse] `json:"xray_scan,omitempty"`
 }
@@ -420,6 +420,11 @@ func (sr *TargetResults) SetDescriptors(descriptors ...string) *TargetResults {
 	return sr
 }
 
+func (sr *TargetResults) SetSbom(sbom *cyclonedx.BOM) *TargetResults {
+	sr.Sbom = sbom
+	return sr
+}
+
 func (sr *TargetResults) NewScaScanResults(errorCode int, responses ...services.ScanResponse) *ScaScanResults {
 	if sr.ScaResults == nil {
 		sr.ScaResults = &ScaScanResults{}
@@ -428,11 +433,6 @@ func (sr *TargetResults) NewScaScanResults(errorCode int, responses ...services.
 		sr.ScaResults.XrayResults = append(sr.ScaResults.XrayResults, ScanResult[services.ScanResponse]{Scan: response, StatusCode: errorCode})
 	}
 	return sr.ScaResults
-}
-
-func (ssr *ScaScanResults) SetSbom(sbom *cyclonedx.BOM) *ScaScanResults {
-	ssr.Sbom = sbom
-	return ssr
 }
 
 func (ssr *ScaScanResults) HasInformation() bool {

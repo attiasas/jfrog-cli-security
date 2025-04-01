@@ -15,13 +15,15 @@ import (
 	"github.com/jfrog/jfrog-cli-security/jas/applicability"
 	"github.com/jfrog/jfrog-cli-security/jas/runner"
 	"github.com/jfrog/jfrog-cli-security/jas/secrets"
+	"github.com/jfrog/jfrog-cli-security/sca/bom"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/results/output"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/jfrog/jfrog-cli-security/utils/xray/scangraph"
 	"github.com/jfrog/jfrog-cli-security/utils/xsc"
-	// scaRunner "github.com/jfrog/jfrog-cli-security/sca"
+
+	scaRunner "github.com/jfrog/jfrog-cli-security/sca/runner"
 	"golang.org/x/exp/slices"
 
 	xrayutils "github.com/jfrog/jfrog-cli-security/utils/xray"
@@ -405,11 +407,13 @@ func initAuditCmdResults(params *AuditParams) (cmdResults *results.SecurityComma
 		cmdResults.SetSecretValidation(jas.CheckForSecretValidation(xrayManager, params.GetXrayVersion(), slices.Contains(params.AuditBasicParams.ScansToPerform(), utils.SecretTokenValidationScan)))
 	}
 	// Initialize targets
+	// detectComponentsToScan(cmdResults, params, &JfrogBomGenerator{ params: params })
 	detectScanTargets(cmdResults, params)
-	if params.IsRecursiveScan() && len(params.workingDirs) == 1 && len(cmdResults.Targets) == 0 {
-		// No SCA targets were detected, add the root directory as a target for JAS scans.
-		cmdResults.NewScanResults(results.ScanTarget{Target: params.workingDirs[0]})
-	}
+
+	// if params.IsRecursiveScan() && len(params.workingDirs) == 1 && len(cmdResults.Targets) == 0 {
+	// 	// No SCA targets were detected, add the root directory as a target for JAS scans.
+	// 	cmdResults.NewScanResults(results.ScanTarget{Target: params.workingDirs[0]})
+	// }
 	scanInfo, err := coreutils.GetJsonIndent(cmdResults.GetTargets())
 	if err != nil {
 		return
