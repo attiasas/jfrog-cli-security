@@ -3,7 +3,6 @@ package output
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 
 	"github.com/jfrog/jfrog-cli-core/v2/common/format"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
@@ -37,10 +36,17 @@ type ResultsWriter struct {
 	subScansPerformed []utils.SubScanType
 	// Messages - Option array of messages, to be displayed if the format is Table
 	messages []string
+	// OutputDir - The output directory to save the raw results.
+	outputDir string
 }
 
 func NewResultsWriter(scanResults *results.SecurityCommandResults) *ResultsWriter {
 	return &ResultsWriter{commandResults: scanResults}
+}
+
+func (rw *ResultsWriter) SetOutputDir(outputDir string) *ResultsWriter {
+	rw.outputDir = outputDir
+	return rw
 }
 
 func (rw *ResultsWriter) SetOutputFormat(f format.OutputFormat) *ResultsWriter {
@@ -103,21 +109,14 @@ func (rw *ResultsWriter) PrintScanResults() error {
 		return nil
 	}
 	// Helper for Debugging purposes, print the raw results to the log
-	if err := rw.printRawResultsLog(); err != nil {
+	if err := rw.printRawResults(); err != nil {
 		return err
 	}
-
+	// Print the results in the specified format.
 	switch rw.format {
 	case format.Table:
-		if err := rw.saveCycloneDx(); err != nil {
-			return err
-		}
 		return rw.printTables()
 	case format.SimpleJson:
-		// Helper for Debugging purposes, print the raw results to the log
-		if err := rw.printRawResultsLog(); err != nil {
-			return err
-		}
 		simpleJson, err := rw.createResultsConvertor(false).ConvertToSimpleJson(rw.commandResults)
 		if err != nil {
 			return err
@@ -126,10 +125,6 @@ func (rw *ResultsWriter) PrintScanResults() error {
 	case format.Json:
 		return PrintJson(rw.commandResults.GetScaScansXrayResults())
 	case format.Sarif:
-		// Helper for Debugging purposes, print the raw results to the log
-		if err := rw.printRawResultsLog(); err != nil {
-			return err
-		}
 		return rw.printSarif()
 	case format.CycloneDx:
 		return rw.printCycloneDx()
@@ -165,39 +160,21 @@ func (rw *ResultsWriter) printSarif() error {
 	return nil
 }
 
-func (rw *ResultsWriter) saveCycloneDx() error {
+func (rw *ResultsWriter) SaveAsCycloneDxFile(pathToSave string) error {
 	bom, err := rw.createResultsConvertor(true).ConvertToCycloneDx(rw.commandResults)
 	if err != nil {
 		return err
 	}
-	cwd, err := os.Getwd()
+	file, err := os.Create(pathToSave)
 	if err != nil {
 		return errorutils.CheckError(err)
 	}
-	file, err := os.Create(filepath.Join(cwd, "bom.json"))
-	if err != nil {
-		return errorutils.CheckError(err)
-	}
-	if err = cyclonedx.NewBOMEncoder(file, cyclonedx.BOMFileFormatJSON).SetPretty(true).Encode(bom); err != nil {
-		return err
-	}
-	return nil
+	return cyclonedx.NewBOMEncoder(file, cyclonedx.BOMFileFormatJSON).SetPretty(true).Encode(bom)
 }
 
 func (rw *ResultsWriter) printCycloneDx() error {
 	bom, err := rw.createResultsConvertor(true).ConvertToCycloneDx(rw.commandResults)
 	if err != nil {
-		return err
-	}
-	cwd, err := os.Getwd()
-	if err != nil {
-		return errorutils.CheckError(err)
-	}
-	file, err := os.Create(filepath.Join(cwd, "bom.json"))
-	if err != nil {
-		return errorutils.CheckError(err)
-	}
-	if err = cyclonedx.NewBOMEncoder(file, cyclonedx.BOMFileFormatJSON).SetPretty(true).Encode(bom); err != nil {
 		return err
 	}
 	return cyclonedx.NewBOMEncoder(os.Stdout, cyclonedx.BOMFileFormatJSON).SetPretty(true).Encode(bom)
@@ -213,17 +190,28 @@ func PrintJson(output interface{}) (err error) {
 }
 
 // Log (Debug) the inner results.SecurityCommandResults object object as a JSON string.
-func (rw *ResultsWriter) printRawResultsLog() (err error) {
-	if !rw.commandResults.HasInformation() {
-		log.Debug("No information to print")
+func (rw *ResultsWriter) printRawResults() (err error) {
+	if rw.outputDir == "" && (!rw.commandResults.HasInformation() || rw.commandResults.GetErrors() == nil) {
+		// Don't print if not requested, there are no results or not errors.
 		return
 	}
-	// Print the raw results to console.
-	var msg string
-	if msg, err = utils.GetAsJsonString(rw.commandResults, false, true); err != nil {
+	if rw.outputDir == "" {
+		// Print the raw results to the log. (only in case we have error and information)
+		var msg string
+		if msg, err = utils.GetAsJsonString(rw.commandResults, false, true); err != nil {
+			return
+		}
+		log.Debug(fmt.Sprintf("Raw scan results:\n%s", msg))
 		return
 	}
-	log.Debug(fmt.Sprintf("Raw scan results:\n%s", msg))
+	// Save the raw results to a file.
+	var msg []byte
+	if msg, err = utils.GetAsJsonBytes(rw.commandResults, false, true); err != nil {
+		return
+	}
+	if err = utils.DumpContentToFile(msg, rw.outputDir, "raw"); err != nil {
+		return
+	}
 	return
 }
 
