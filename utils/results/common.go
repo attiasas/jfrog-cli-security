@@ -756,3 +756,11 @@ func shouldSkipNotApplicable(violation services.Violation, applicabilityStatus j
 	}
 	return true, nil
 }
+
+// We only care to update the status if it's the first time we see it or if status is 0 (completed) and the new status is not (failed)
+func ShouldUpdateStatus(currentStatus, newStatus *int) bool {
+	if currentStatus == nil || (*currentStatus == 0 && newStatus != nil) {
+		return true
+	}
+	return false
+}
