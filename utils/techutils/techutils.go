@@ -3,7 +3,6 @@ package techutils
 import (
 	"errors"
 	"fmt"
-	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -13,8 +12,6 @@ import (
 	"golang.org/x/exp/maps"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
-
-	"github.com/package-url/packageurl-go"
 
 	"github.com/jfrog/gofrog/datastructures"
 	"github.com/jfrog/jfrog-cli-core/v2/common/project"
@@ -96,6 +93,24 @@ var packageTypes = map[string]string{
 	"composer": "Composer",
 	"go":       "Go",
 	"alpine":   "Alpine",
+	"swift":    "Swift",
+}
+
+// The identifier of the package type used in cdx.
+var gdxPackageTypes = map[string]string{
+	"gav":      "maven",
+	"docker":   "docker",
+	"rpm":      "rpm",
+	"deb":      "deb",
+	"nuget":    "nuget",
+	"generic":  "generic",
+	"npm":      "npm",
+	"pip":      "pypi",
+	"pypi":     "pypi",
+	"composer": "composer",
+	"go":       "golang",
+	"alpine":   "alpine",
+	"swift":    "swift",
 }
 
 type TechData struct {
@@ -103,6 +118,7 @@ type TechData struct {
 	packageType string
 	// The package type ID used in Xray.
 	packageTypeId string
+
 	// Suffixes of file/directory names that indicate if a project uses this technology.
 	// The name of at least one of the files/directories in the project's directory must end with one of these suffixes.
 	indicators []string
@@ -758,38 +774,6 @@ func SplitComponentIdRaw(componentId string) (string, string, string) {
 	return compName, compVersion, packageType
 }
 
-// Parse a given Package URL (purl) and return the component name, version, and package type.
-// Examples:
-//  1. purl: "pkg:golang/github.com/gophish/gophish@v0.1.2"
-//     Returned values:
-//     Component name: "github.com/gophish/gophish"
-//     Component version: "v0.1.2"
-//     Package type: "golang"
-//  2. purl: "pkg:golang/github.com/go-gitea/gitea"
-//     Returned values:
-//     Component name: "github.com/go-gitea/gitea"
-//     Component version: ""
-//     Package type: "golang"
-//  3. purl: "pkg:gav/xpp3:xpp3_min@1.1.4c"
-//     Returned values:
-//     Component name: "xpp3:xpp3_min"
-//     Component version: "1.1.4c"
-//     Package type: "gav"
-func SplitPackageURL(purl string) (compName, compVersion, packageType string) {
-	parsed, err := packageurl.FromString(purl)
-	if err != nil {
-		log.Debug(fmt.Sprintf("Failed to parse package URL: %s", err))
-		return purl, "", ""
-	}
-	compName = parsed.Name
-	if parsed.Namespace != "" {
-		compName = parsed.Namespace + "/" + compName
-	}
-	compVersion = parsed.Version
-	packageType = parsed.Type
-	return
-}
-
 func ToXrayComponentId(compName, version, packageType string) (output string) {
 	output = fmt.Sprintf("%s://%s", packageType, compName)
 	if version != "" {
@@ -798,14 +782,9 @@ func ToXrayComponentId(compName, version, packageType string) (output string) {
 	return
 }
 
-func ToPackageUrl(compName, version, packageType string) (output string) {
-	purl := packageurl.NewPackageURL(packageType, "", compName, version, nil, "").String()
-	// Unescape the output
-	output, err := url.QueryUnescape(purl)
-	if err != nil {
-		log.Debug(fmt.Sprintf("Failed to unescape package URL: %s", err))
-		// Return the original output
-		return purl
+func ToGdxPackageType(packageType string) string {
+	if gdxPackageType, exist := gdxPackageTypes[packageType]; exist {
+		return gdxPackageType
 	}
-	return 
+	return packageType
 }
