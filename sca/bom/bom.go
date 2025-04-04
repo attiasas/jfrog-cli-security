@@ -1,71 +1,197 @@
 package bom
 
 import (
+	"fmt"
+	"net/url"
+
 	"github.com/CycloneDX/cyclonedx-go"
+	"github.com/package-url/packageurl-go"
+
 	"github.com/jfrog/gofrog/datastructures"
-	"github.com/jfrog/jfrog-cli-security/utils/techutils"
+	"github.com/jfrog/jfrog-client-go/utils/log"
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
+
+	"github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 )
 
-func DepsTreeToSbom(trees ...*xrayUtils.GraphNode) (sbom *cyclonedx.BOM) {
-	sbom = cyclonedx.NewBOM()
-	sbom.Components = &[]cyclonedx.Component{}
-	sbom.Dependencies = &[]cyclonedx.Dependency{}
-	parsed := datastructures.MakeSet[string]()
-	// Populate Metadata
-	sbom.Metadata = parseTreesForApplicationsMetaData(trees)
-	// Populate Components and Dependencies
-	for _, tree := range trees {
-		parseDepsTreeToBOM(tree, sbom, parsed)
+// Parse a given Package URL (purl) and return the component name, version, and package type.
+// Examples:
+//  1. purl: "pkg:golang/github.com/gophish/gophish@v0.1.2"
+//     Returned values:
+//     Component name: "github.com/gophish/gophish"
+//     Component version: "v0.1.2"
+//     Package type: "golang"
+//     Qualifiers: map[string]string{}
+//  2. purl: "pkg:golang/github.com/go-gitea/gitea"
+//     Returned values:
+//     Component name: "github.com/go-gitea/gitea"
+//     Component version: ""
+//     Package type: "golang"
+//     Qualifiers: map[string]string{}
+//  3. purl: "pkg:gav/xpp3:xpp3_min@1.1.4c"
+//     Returned values:
+//     Component name: "xpp3:xpp3_min"
+//     Component version: "1.1.4c"
+//     Package type: "gav"
+//     Qualifiers: map[string]string{}
+//  4. purl: "pkg:maven/org.apache.commons/commons-lang3@3.12.0?package-id=d3f8d67af404667f"
+//     Returned values:
+//     Component name: "org.apache.commons/commons-lang3"
+//     Component version: "3.12.0"
+//     Package type: "maven"
+//     Qualifiers: map[string]string{"package-id": "d3f8d67af404667f"}
+func SplitPackageUrlWithQualifiers(purl string) (compName, compVersion, packageType string, qualifiers map[string]string) {
+	parsed, err := packageurl.FromString(purl)
+	if err != nil {
+		log.Debug(fmt.Sprintf("Failed to parse package URL '%s': %s", purl, err))
+		return purl, "", "", nil
 	}
-	return
-}
-
-func parseTreesForApplicationsMetaData(trees []*xrayUtils.GraphNode) (metadata *cyclonedx.Metadata) {
-	metadata = &cyclonedx.Metadata{Component: &cyclonedx.Component{}}
-	singleApplication := len(trees) == 1
-	for _, tree := range trees {
-		applicationComponent := cyclonedx.Component{
-			BOMRef:     XrayComponentIdToPurl(tree.Id),
-			PackageURL: XrayComponentIdToPurl(tree.Id),
-			Type:       cyclonedx.ComponentTypeApplication,
-		}
-		if singleApplication {
-			metadata.Component = &applicationComponent
-		} else {
-			*metadata.Component.Components = append(*metadata.Component.Components, applicationComponent)
-		}
+	compName = parsed.Name
+	if parsed.Namespace != "" {
+		compName = parsed.Namespace + "/" + compName
 	}
-	return
-}
-
-func parseDepsTreeToBOM(node *xrayUtils.GraphNode, sbom *cyclonedx.BOM, parsed *datastructures.Set[string]) {
-	// Extract the component name, version and type from the Xray component id
-	compName, compVersion, compType := techutils.SplitComponentIdRaw(node.Id)
-	packageUrl := techutils.ToPackageUrl(compName, compVersion, compType)
-	// Check if the component was already parsed
-	if parsed.Exists(packageUrl) {
+	compVersion = parsed.Version
+	packageType = parsed.Type
+	if err := parsed.Qualifiers.Normalize(); err != nil {
+		log.Debug(fmt.Sprintf("Failed to normalize '%s' qualifiers: %s", purl, err))
 		return
 	}
-	parsed.Add(packageUrl)
-	if node.Parent != nil {
-		// Create a new component and add it to the sbom
-		component := cyclonedx.Component{
-			BOMRef:     packageUrl,
-			PackageURL: packageUrl,
-			Name:       compName,
-			Version:    compVersion,
-			Type:       cyclonedx.ComponentTypeLibrary,
+	qualifiers = parsed.Qualifiers.Map()
+	return
+}
+
+func SplitPackageURL(purl string) (compName, compVersion, packageType string) {
+	compName, compVersion, packageType, _ = SplitPackageUrlWithQualifiers(purl)
+	return
+}
+
+func ToPackageUrl(compName, version, packageType string, properties ...cyclonedx.Property) (output string) {
+	// Convert properties if provided
+	var qualifiers packageurl.Qualifiers
+	if len(properties) > 0 {
+		qualifiers = packageurl.QualifiersFromMap(propertiesToMap(properties...))
+	}
+	purl := packageurl.NewPackageURL(packageType, "", compName, version, qualifiers, "").String()
+	// Unescape the output
+	output, err := url.QueryUnescape(purl)
+	if err != nil {
+		log.Debug(fmt.Sprintf("Failed to unescape package URL: %s", err))
+		// Return the original output
+		return purl
+	}
+	return
+}
+
+func propertiesToMap(properties ...cyclonedx.Property) (propertiesMap map[string]string) {
+	propertiesMap = make(map[string]string)
+	for _, property := range properties {
+		if property.Name != "" && property.Value != "" {
+			propertiesMap[property.Name] = property.Value
 		}
-		*sbom.Components = append(*sbom.Components, component)
 	}
-	// Create a matching dependency
-	dependency := cyclonedx.Dependency{Ref: packageUrl, Dependencies: getNodeDirectDependencies(node)}
-	*sbom.Dependencies = append(*sbom.Dependencies, dependency)
-	// Add the dependencies to the BOM
+	return
+}
+
+// Extract the component name, version and type from PackageUrl and translate it to an Xray component id
+func PurlToXrayComponentId(purl string) (xrayComponentId string) {
+	compName, compVersion, compType := SplitPackageURL(purl)
+	return techutils.ToXrayComponentId(compName, compVersion, compType)
+}
+
+func XrayComponentIdToPurl(xrayComponentId string) (purl string) {
+	compName, compVersion, compType := techutils.SplitComponentIdRaw(xrayComponentId)
+	return ToPackageUrl(compName, compVersion, techutils.ToGdxPackageType(compType))
+}
+
+func GetScaComponentRef(xrayImpactedPackageId string) string {
+	compName, compVersion, compType := techutils.SplitComponentIdRaw(xrayImpactedPackageId)
+	return ToPackageUrl(compName, compVersion, techutils.ToGdxPackageType(compType))
+}
+
+func GetFileRef(filePath string) string {
+	wdRef, err := utils.Md5Hash(filePath)
+	if err != nil {
+		return filePath
+	}
+	return wdRef
+}
+
+func CreateScaComponent(xrayImpactedPackageId string, properties ...cyclonedx.Property) (component cyclonedx.Component) {
+	compName, compVersion, compType := techutils.SplitComponentIdRaw(xrayImpactedPackageId)
+	component = cyclonedx.Component{
+		BOMRef:     GetScaComponentRef(xrayImpactedPackageId),
+		Type:       cyclonedx.ComponentTypeLibrary,
+		Name:       compName,
+		Version:    compVersion,
+		PackageURL: ToPackageUrl(compName, compVersion, techutils.ToGdxPackageType(compType)),
+	}
+	if len(properties) > 0 {
+		component.Properties = &properties
+	}
+	return
+}
+
+func CreateWorkingDirComponent(wd string) (component cyclonedx.Component) {
+	component = cyclonedx.Component{
+		BOMRef: GetFileRef(wd),
+		Type:   cyclonedx.ComponentTypeFile,
+		Name:   wd,
+	}
+	return
+}
+
+func IsMultiProject(sbom *cyclonedx.BOM) bool {
+	return len(ReduceToRoots(sbom.Dependencies)) > 1
+}
+
+func SearchDependencyEntry(dependencies *[]cyclonedx.Dependency, ref string) *cyclonedx.Dependency {
+	if dependencies == nil || len(*dependencies) == 0 {
+		return nil
+	}
+	for _, dependency := range *dependencies {
+		if dependency.Ref == ref {
+			return &dependency
+		}
+	}
+	return nil
+}
+
+// Conversion functions
+
+func DepsTreeToSbom(trees ...*xrayUtils.GraphNode) (components *[]cyclonedx.Component, dependencies *[]cyclonedx.Dependency) {
+	parsed := datastructures.MakeSet[string]()
+	components = &[]cyclonedx.Component{}
+	dependencies = &[]cyclonedx.Dependency{}
+	for _, root := range trees {
+		if root.Id != "root" {
+			components, dependencies = getDataFromNode(root, parsed, components, dependencies)
+			continue
+		}
+		for _, module := range root.Nodes {
+			components, dependencies = getDataFromNode(module, parsed, components, dependencies)
+		}
+	}
+	return
+}
+
+func getDataFromNode(node *xrayUtils.GraphNode, parsed *datastructures.Set[string], components *[]cyclonedx.Component, dependencies *[]cyclonedx.Dependency) (*[]cyclonedx.Component, *[]cyclonedx.Dependency) {
+	if parsed.Exists(node.Id) {
+		// The node was already parsed, no need to parse it again
+		return components, dependencies
+	}
+	parsed.Add(node.Id)
+	// Create a new component and add it to the sbom
+	*components = append(*components, CreateScaComponent(node.Id))
+	if len(node.Nodes) > 0 {
+		// Create a matching dependency entry describing the direct dependencies
+		*dependencies = append(*dependencies, cyclonedx.Dependency{Ref: GetScaComponentRef(node.Id), Dependencies: getNodeDirectDependencies(node)})
+	}
+	// Go through the dependencies and add them to the sbom
 	for _, dependencyNode := range node.Nodes {
-		parseDepsTreeToBOM(dependencyNode, sbom, parsed)
+		components, dependencies = getDataFromNode(dependencyNode, parsed, components, dependencies)
 	}
+	return components, dependencies
 }
 
 func getNodeDirectDependencies(node *xrayUtils.GraphNode) (dependencies *[]string) {
@@ -85,12 +211,39 @@ func BomToTree(sbom *cyclonedx.BOM) (flatTree *xrayUtils.GraphNode, fullDependen
 }
 
 func BomToFullTree(sbom *cyclonedx.BOM) (fullDependencyTrees []*xrayUtils.GraphNode) {
-	for _, applicationRef := range GetApplicationComponentRefs(sbom) {
-		currentTree := &xrayUtils.GraphNode{Id: applicationRef}
+	for _, rootEntry := range ReduceToRoots(sbom.Dependencies) {
+		currentTree := &xrayUtils.GraphNode{Id: rootEntry.Ref}
 		// Populate application tree
 		populateDepsNodeDataFromBom(currentTree, sbom)
 		// Add the tree to the output list
 		fullDependencyTrees = append(fullDependencyTrees, currentTree)
+	}
+	return
+}
+
+func ReduceToRoots(dependencies *[]cyclonedx.Dependency) (roots []cyclonedx.Dependency) {
+	roots = []cyclonedx.Dependency{}
+	if dependencies == nil {
+		return
+	}
+	// Set to track all references that are listed in `dependsOn`
+	dependedRefs := datastructures.MakeSet[string]()
+	// Populate the maps
+	for _, dep := range *dependencies {
+		if dep.Dependencies == nil {
+			// No dependencies, continue
+			continue
+		}
+		for _, dependsOn := range *dep.Dependencies {
+			dependedRefs.Add(dependsOn)
+		}
+	}
+	// Identify root dependencies (those not listed in any `dependsOn`)
+	for _, dep := range *dependencies {
+		if !dependedRefs.Exists(dep.Ref) {
+			// This is a root dependency, add it
+			roots = append(roots, dep)
+		}
 	}
 	return
 }
@@ -134,24 +287,10 @@ func BomToFlatCompTree(sbom *cyclonedx.BOM) (flatTree *xrayUtils.BinaryGraphNode
 	return
 }
 
-// Help functions
-
-func GetApplicationComponentRefs(bom *cyclonedx.BOM) (applicationComponentRefs []string) {
-	if bom == nil || bom.Components == nil {
-		return
-	}
-	// Collect all the 'Application' components from the BOM
-	if bom.Metadata == nil || bom.Metadata.Component == nil {
-		return
-	}
-	mainComponent := bom.Metadata.Component
-	if mainComponent.Type == cyclonedx.ComponentTypeApplication {
-		applicationComponentRefs = append(applicationComponentRefs, mainComponent.BOMRef)
-	}
-	for _, component := range *mainComponent.Components {
-		if component.Type == cyclonedx.ComponentTypeApplication {
-			applicationComponentRefs = append(applicationComponentRefs, component.BOMRef)
-		}
+func BomToFlatCompIds(sbom *cyclonedx.BOM) (flatDepList *[]string) {
+	flatDepList = &[]string{}
+	for _, component := range getUniqueXrayCompIds(sbom) {
+		*flatDepList = append(*flatDepList, component)
 	}
 	return
 }
@@ -160,18 +299,24 @@ func getUniqueXrayCompIds(sbom *cyclonedx.BOM) (uniqueCompIds []string) {
 	components := datastructures.MakeSet[string]()
 	// Collect all unique components
 	for _, component := range *sbom.Components {
+		if component.Type != cyclonedx.ComponentTypeLibrary {
+			// We are only interested in libraries for the dependency tree
+			continue
+		}
 		components.Add(PurlToXrayComponentId(component.PackageURL))
 	}
 	return components.ToSlice()
 }
 
-// Extract the component name, version and type from PackageUrl and translate it to an Xray component id
-func PurlToXrayComponentId(purl string) (xrayComponentId string) {
-	compName, compVersion, compType := techutils.SplitPackageURL(purl)
-	return techutils.ToXrayComponentId(compName, compVersion, compType)
-}
-
-func XrayComponentIdToPurl(xrayComponentId string) (purl string) {
-	compName, compVersion, compType := techutils.SplitComponentIdRaw(xrayComponentId)
-	return techutils.ToPackageUrl(compName, compVersion, compType)
+func BomToDirectCompIds(sbom *cyclonedx.BOM) (directDepList *[]string) {
+	directDepList = &[]string{}
+	for _, root := range ReduceToRoots(sbom.Dependencies) {
+		if root.Dependencies == nil {
+			continue
+		}
+		for _, directDependency := range *root.Dependencies {
+			*directDepList = append(*directDepList, directDependency)
+		}
+	}
+	return
 }
