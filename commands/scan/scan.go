@@ -230,9 +230,11 @@ func (scanCmd *ScanCommand) Run() (err error) {
 
 func (scanCmd *ScanCommand) recordResults(scanResults *results.SecurityCommandResults) (err error) {
 	hasViolationContext := scanCmd.resultsContext.HasViolationContext()
+	// Record SARIF output for setup-cli-action automatic upload
 	if err = output.RecordSarifOutput(scanResults, scanCmd.serverDetails, scanCmd.resultsContext.IncludeVulnerabilities, hasViolationContext); err != nil {
 		return
 	}
+	// Record scan summary for CLI Job summary
 	var summary output.ScanCommandResultSummary
 	if summary, err = output.NewBinaryScanSummary(scanResults, scanCmd.serverDetails, scanCmd.resultsContext.IncludeVulnerabilities, hasViolationContext); err != nil {
 		return
@@ -260,12 +262,19 @@ func (scanCmd *ScanCommand) RunAndRecordResults(cmdType utils.CommandType, recor
 		}
 	}
 
-	if err = output.NewResultsWriter(cmdResults).
+	outputWriter := output.NewResultsWriter(cmdResults).
 		SetOutputFormat(scanCmd.outputFormat).
 		SetPlatformUrl(scanCmd.serverDetails.Url).
 		SetPrintExtendedTable(scanCmd.printExtendedTable).
-		SetIsMultipleRootProject(cmdResults.HasMultipleTargets()).
-		PrintScanResults(); err != nil {
+		SetIsMultipleRootProject(cmdResults.HasMultipleTargets())
+
+	if err = outputWriter.PrintScanResults(); err != nil {
+		return errors.Join(err, cmdResults.GetErrors())
+	}
+
+	// Upload the scan results to a JFrog repository
+	if err = outputWriter.UploadCdxScanResults(scanCmd.serverDetails, scanCmd.scanResultsRepository, ""); err != nil {
+		// Error uploading the scan results, return the error and the scan results errors.
 		return errors.Join(err, cmdResults.GetErrors())
 	}
 

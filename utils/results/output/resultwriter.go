@@ -1,12 +1,16 @@
 package output
 
 import (
+	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/jfrog/jfrog-cli-core/v2/common/format"
+	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-cli-security/utils/artifactory"
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
@@ -408,4 +412,28 @@ func WriteJsonResults(results *results.SecurityCommandResults) (resultsPath stri
 
 func WriteSarifResultsAsString(report *sarif.Report, escape bool) (sarifStr string, err error) {
 	return utils.GetAsJsonString(report, escape, true)
+}
+
+func (rw *ResultsWriter) UploadCdxScanResults(serverDetails *config.ServerDetails, scanResultsRepository, scanResultsOutputDir string) (err error) {
+	if scanResultsRepository == "" {
+		// No need to upload the scan results
+		return
+	}
+	// Resolve the output directory for the scan results
+	directory := scanResultsOutputDir
+	if directory == "" {
+		if directory, err = fileutils.CreateTempDir(); errorutils.CheckError(err) != nil {
+			return
+		}
+		defer func() {
+			err = errors.Join(err, fileutils.RemoveTempDir(directory))
+		}()
+	}
+	// Save the scan results to a file and upload it to the repository
+	cdxFilePath := filepath.Join(directory, fmt.Sprintf("%s_scan_%s.cdx.json", rw.commandResults.CmdType, rw.commandResults.MultiScanId))
+	log.Debug(fmt.Sprintf("Saving scan results CycloneDX to %s", cdxFilePath))
+	if err = rw.SaveAsCycloneDxFile(cdxFilePath); err != nil {
+		return fmt.Errorf("failed to save CycloneDX file: %s", err.Error())
+	}
+	return artifactory.UploadCdxScanResults(serverDetails, scanResultsRepository, cdxFilePath)
 }

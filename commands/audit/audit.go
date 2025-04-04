@@ -3,7 +3,6 @@ package audit
 import (
 	"errors"
 	"fmt"
-	"path/filepath"
 	"strings"
 
 	"github.com/jfrog/gofrog/parallel"
@@ -16,7 +15,6 @@ import (
 	"github.com/jfrog/jfrog-cli-security/jas/runner"
 	"github.com/jfrog/jfrog-cli-security/jas/secrets"
 	"github.com/jfrog/jfrog-cli-security/utils"
-	"github.com/jfrog/jfrog-cli-security/utils/artifactory"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/results/output"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
@@ -28,7 +26,6 @@ import (
 
 	xrayutils "github.com/jfrog/jfrog-cli-security/utils/xray"
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
-	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/jfrog/jfrog-client-go/xray"
@@ -492,7 +489,7 @@ func (auditCmd *AuditCommand) getResultWriter(cmdResults *results.SecurityComman
 
 func ProcessResultsAndOutput(serverDetails *config.ServerDetails, auditResults *results.SecurityCommandResults, outputWriter *output.ResultsWriter, failBuild bool, scanResultsOutputDir, scanResultsRepository string) (err error) {
 	// Upload the scan results to a JFrog repository
-	if err = UploadCdxScanResults(serverDetails, scanResultsRepository, auditResults.MultiScanId, outputWriter, scanResultsOutputDir); err != nil {
+	if err = outputWriter.UploadCdxScanResults(serverDetails, scanResultsRepository, scanResultsOutputDir); err != nil {
 		// Error uploading the scan results, return the error and the scan results errors.
 		return errors.Join(err, auditResults.GetErrors())
 	}
@@ -509,28 +506,4 @@ func ProcessResultsAndOutput(serverDetails *config.ServerDetails, auditResults *
 		err = results.NewFailBuildError()
 	}
 	return
-}
-
-func UploadCdxScanResults(serverDetails *config.ServerDetails, scanResultsRepository, msi string, outputWriter *output.ResultsWriter, scanResultsOutputDir string) (err error) {
-	if scanResultsRepository == "" {
-		// No need to upload the scan results
-		return
-	}
-	// Resolve the output directory for the scan results
-	directory := scanResultsOutputDir
-	if directory == "" {
-		if directory, err = fileutils.CreateTempDir(); errorutils.CheckError(err) != nil {
-			return
-		}
-		defer func() {
-			err = errors.Join(err, fileutils.RemoveTempDir(directory))
-		}()
-	}
-	// Save the scan results to a file and upload it to the repository
-	cdxFilePath := filepath.Join(directory, fmt.Sprintf("%s_scan_%s.cdx.json", utils.SourceCode, msi))
-	log.Debug(fmt.Sprintf("Saving scan results CycloneDX to %s", cdxFilePath))
-	if err = outputWriter.SaveAsCycloneDxFile(cdxFilePath); err != nil {
-		return fmt.Errorf("failed to save CycloneDX file: %s", err.Error())
-	}
-	return artifactory.UploadCdxScanResults(serverDetails, scanResultsRepository, cdxFilePath)
 }
