@@ -15,12 +15,12 @@ import (
 	"golang.org/x/exp/slices"
 
 	jfrogappsconfig "github.com/jfrog/jfrog-apps-config/go"
-	auditSca "github.com/jfrog/jfrog-cli-security/commands/audit/sca"
 	"github.com/jfrog/jfrog-cli-security/jas"
 	"github.com/jfrog/jfrog-cli-security/jas/applicability"
 	"github.com/jfrog/jfrog-cli-security/jas/runner"
 	"github.com/jfrog/jfrog-cli-security/jas/secrets"
 	"github.com/jfrog/jfrog-cli-security/sca/bom"
+	scaRunner "github.com/jfrog/jfrog-cli-security/sca/runner"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/results/output"
 	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
@@ -75,12 +75,12 @@ type ScanCommand struct {
 	commandSupportsJAS bool
 	targetNameOverride string
 
-	resultsContext results.ResultContext
-
-	xrayVersion string
-	xscVersion  string
-	multiScanId string
-	startTime   time.Time
+	resultsContext        results.ResultContext
+	scanResultsRepository string
+	xrayVersion           string
+	xscVersion            string
+	multiScanId           string
+	startTime             time.Time
 }
 
 func (scanCmd *ScanCommand) SetMinSeverityFilter(minSeverityFilter severityutils.Severity) *ScanCommand {
@@ -188,6 +188,11 @@ func (scanCmd *ScanCommand) SetXrayVersion(xrayVersion string) *ScanCommand {
 
 func (scanCmd *ScanCommand) SetXscVersion(xscVersion string) *ScanCommand {
 	scanCmd.xscVersion = xscVersion
+	return scanCmd
+}
+
+func (scanCmd *ScanCommand) SetScanResultRepository(repository string) *ScanCommand {
+	scanCmd.scanResultsRepository = repository
 	return scanCmd
 }
 
@@ -423,6 +428,7 @@ func (scanCmd *ScanCommand) createIndexerHandlerFunc(file *spec.File, cmdResults
 				scanCmd.progress.SetHeadlineMsg("Indexing file: " + targetResults.Name + " 🗄")
 			}
 			// Index the file and get the dependencies graph.
+			// TODO: create indexer strategy
 			graph, err := scanCmd.indexFile(targetResults.Target)
 			if err != nil {
 				return targetResults.AddTargetError(err, false)
@@ -465,7 +471,7 @@ func (scanCmd *ScanCommand) createIndexerHandlerFunc(file *spec.File, cmdResults
 				if err != nil {
 					return targetResults.AddTargetError(fmt.Errorf("%s sca scanning '%s' failed with error: %s", scanLogPrefix, graph.Id, err.Error()), false)
 				} else {
-					targetResults.NewScaScanResults(auditSca.GetScaScansStatusCode(err, *graphScanResults), *graphScanResults)
+					targetResults.NewScaScanResults(scaRunner.GetScaScansStatusCode(err, *graphScanResults), *graphScanResults)
 					targetResults.SetSbom(bom.CompTreeToSbom(graph))
 					targetResults.Technology = techutils.Technology(graphScanResults.ScannedPackageType)
 				}
