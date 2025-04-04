@@ -23,8 +23,10 @@ type GitAuditParams struct {
 	threads        int
 	exclusions     []string
 	// Output params
-	outputFormat  format.OutputFormat
-	extendedTable bool
+	outputFormat          format.OutputFormat
+	extendedTable         bool
+	scanResultsRepository string
+	scanResultsOutputDir  string
 	// Cmd information (not params, set by the cmd)
 	xrayVersion         string
 	xscVersion          string
@@ -109,5 +111,15 @@ func (gap *GitAuditParams) SetThreads(threads int) *GitAuditParams {
 
 func (gap *GitAuditParams) SetExclusions(exclusions []string) *GitAuditParams {
 	gap.exclusions = exclusions
+	return gap
+}
+
+func (gap *GitAuditParams) SetScanResultsOutputDir(scanResultsOutputDir string) *GitAuditParams {
+	gap.scanResultsOutputDir = scanResultsOutputDir
+	return gap
+}
+
+func (gap *GitAuditParams) SetScanResultsRepository(scanResultsRepository string) *GitAuditParams {
+	gap.scanResultsRepository = scanResultsRepository
 	return gap
 }

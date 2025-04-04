@@ -124,6 +124,7 @@ const (
 	OutputDir                    = "output-dir"
 	SkipAutoInstall              = "skip-auto-install"
 	AllowPartialResults          = "allow-partial-results"
+	ScanResultsRepository        = "scan-results-repository"
 
 	// Unique curation flags
 	CurationOutput = "curation-format"
@@ -145,7 +146,7 @@ var commandFlags = map[string][]string{
 	OfflineUpdate: {LicenseId, From, To, Version, Target, Stream, Periodic},
 	XrScan: {
 		url, user, password, accessToken, ServerId, SpecFlag, Threads, scanRecursive, scanRegexp, scanAnt,
-		Project, Watches, RepoPath, Licenses, Sbom, OutputFormat, Fail, ExtendedTable, BypassArchiveLimits, MinSeverity, FixableOnly, ScanVuln,
+		Project, Watches, RepoPath, Licenses, Sbom, OutputFormat, Fail, ExtendedTable, BypassArchiveLimits, MinSeverity, FixableOnly, ScanVuln, ScanResultsRepository,
 	},
 	Enrich: {
 		url, user, password, accessToken, ServerId, Threads,
@@ -154,13 +155,14 @@ var commandFlags = map[string][]string{
 		url, user, password, accessToken, ServerId, Project, BuildVuln, OutputFormat, Fail, ExtendedTable, Rescan,
 	},
 	DockerScan: {
-		ServerId, Project, Watches, RepoPath, Licenses, Sbom, OutputFormat, Fail, ExtendedTable, BypassArchiveLimits, MinSeverity, FixableOnly, ScanVuln, SecretValidation,
+		ServerId, Project, Watches, RepoPath, Licenses, Sbom, OutputFormat, Fail, ExtendedTable, BypassArchiveLimits, MinSeverity, FixableOnly, ScanVuln, SecretValidation, ScanResultsRepository,
 	},
 	Audit: {
-		url, xrayUrl, user, password, accessToken, ServerId, InsecureTls, Project, Watches, RepoPath, Sbom, Licenses, OutputFormat, ExcludeTestDeps,
+		url, xrayUrl, user, password, accessToken, ServerId, InsecureTls, Project, Watches, RepoPath, Licenses, OutputFormat, ExcludeTestDeps,
 		useWrapperAudit, DepType, RequirementsFile, Fail, ExtendedTable, WorkingDirs, ExclusionsAudit, Mvn, Gradle, Npm,
 		Pnpm, Yarn, Go, Nuget, Pip, Pipenv, Poetry, MinSeverity, FixableOnly, ThirdPartyContextualAnalysis, Threads,
 		Sca, Iac, Sast, Secrets, WithoutCA, ScanVuln, SecretValidation, OutputDir, SkipAutoInstall, AllowPartialResults, MaxTreeDepth,
+		ScanResultsRepository, Sbom,
 	},
 	GitAudit: {
 		// Connection params
@@ -171,7 +173,8 @@ var commandFlags = map[string][]string{
 		Threads, ExclusionsAudit,
 		Sca, Iac, Sast, Secrets, WithoutCA, SecretValidation,
 		// Output params
-		Licenses, OutputFormat, ExtendedTable,
+		OutputDir, Licenses, OutputFormat, ExtendedTable,
+		ScanResultsRepository, Sbom,
 	},
 	CurationAudit: {
 		CurationOutput, WorkingDirs, Threads, RequirementsFile,
@@ -248,10 +251,11 @@ var flagsMap = map[string]components.Flag{
 		"[Gradle, Maven] Set to true if you'd like to use the Gradle or Maven wrapper.",
 		components.WithBoolDefaultValue(true),
 	),
-	WorkingDirs:         components.NewStringFlag(WorkingDirs, "A comma-separated(,) list of relative working directories, to determine the audit targets locations. If flag isn't provided, a recursive scan is triggered from the root directory of the project."),
-	OutputDir:           components.NewStringFlag(OutputDir, "Target directory to save partial results to.", components.SetHiddenStrFlag()),
-	SkipAutoInstall:     components.NewBoolFlag(SkipAutoInstall, "Set to true to skip auto-install of dependencies in un-built modules. Currently supported for Yarn and NPM only.", components.SetHiddenBoolFlag()),
-	AllowPartialResults: components.NewBoolFlag(AllowPartialResults, "Set to true to allow partial results and continuance of the scan in case of certain errors.", components.SetHiddenBoolFlag()),
+	WorkingDirs:           components.NewStringFlag(WorkingDirs, "A comma-separated(,) list of relative working directories, to determine the audit targets locations. If flag isn't provided, a recursive scan is triggered from the root directory of the project."),
+	OutputDir:             components.NewStringFlag(OutputDir, "Target directory to save partial results to.", components.SetHiddenStrFlag()),
+	ScanResultsRepository: components.NewStringFlag(ScanResultsRepository, "Jfrog Repository to upload the scan results cdx to if provided. Repository will be created if not exists", components.SetHiddenStrFlag(), components.WithStrDefaultValue("cli-scan-results")),
+	SkipAutoInstall:       components.NewBoolFlag(SkipAutoInstall, "Set to true to skip auto-install of dependencies in un-built modules. Currently supported for Yarn and NPM only.", components.SetHiddenBoolFlag()),
+	AllowPartialResults:   components.NewBoolFlag(AllowPartialResults, "Set to true to allow partial results and continuance of the scan in case of certain errors.", components.SetHiddenBoolFlag()),
 	ExclusionsAudit: components.NewStringFlag(
 		Exclusions,
 		"List of semicolon-separated(;) exclusions, utilized to skip sub-projects from undergoing an audit. These exclusions may incorporate the * and ? wildcards.",

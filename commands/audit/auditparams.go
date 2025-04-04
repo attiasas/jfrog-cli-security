@@ -3,9 +3,11 @@ package audit
 import (
 	"time"
 
+	scaRunner "github.com/jfrog/jfrog-cli-security/sca/runner"
 	xrayutils "github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
+	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/jfrog/jfrog-client-go/xray/services"
 	xscservices "github.com/jfrog/jfrog-client-go/xsc/services"
 )
@@ -24,13 +26,40 @@ type AuditParams struct {
 	threads                     int
 	configProfile               *xscservices.ConfigProfile
 	scanResultsOutputDir        string
+	scanResultsRepository       string
 	startTime                   time.Time
+	// Dynamic logic params
+	scanStrategy scaRunner.SbomScanStrategy
+	bomGenerator scaRunner.SbomGenerator
 }
 
 func NewAuditParams() *AuditParams {
-	return &AuditParams{
+	params := &AuditParams{
 		AuditBasicParams: &xrayutils.AuditBasicParams{},
 	}
+	params.scanStrategy = &JfrogScanGraphStrategy{Params: params}
+	params.bomGenerator = &JfrogBomGenerator{params: params}
+	return params
+}
+
+func (params *AuditParams) ScanStrategy() scaRunner.SbomScanStrategy {
+	return params.scanStrategy
+}
+
+func (params *AuditParams) BomGenerator() scaRunner.SbomGenerator {
+	return params.bomGenerator
+}
+
+// When building pip dependency tree using pipdeptree, some of the direct dependencies are recognized as transitive and missed by the CA scanner.
+// Our solution for this case is to send all dependencies to the CA scanner.
+// When thirdPartyApplicabilityScan is true, use flatten graph to include all the dependencies in applicability scanning.
+// Only npm is supported for this flag.
+func (params *AuditParams) ShouldGetFlatTreeForApplicableScan(tech techutils.Technology) bool {
+	// Check if bomGenerator is set to JfrogBomGenerator type, if not, return false
+	if params.bomGenerator == nil || !(params.bomGenerator.(*JfrogBomGenerator) != nil) {
+		return false
+	}
+	return tech == techutils.Pip || (params.thirdPartyApplicabilityScan && tech == techutils.Npm)
 }
 
 func (params *AuditParams) InstallFunc() func(tech string) error {
@@ -119,6 +148,11 @@ func (params *AuditParams) SetConfigProfile(configProfile *xscservices.ConfigPro
 
 func (params *AuditParams) SetScansResultsOutputDir(outputDir string) *AuditParams {
 	params.scanResultsOutputDir = outputDir
+	return params
+}
+
+func (params *AuditParams) SetScansResultsRepository(repository string) *AuditParams {
+	params.scanResultsRepository = repository
 	return params
 }
 

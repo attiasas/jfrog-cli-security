@@ -1,14 +1,16 @@
 package utils
 
 import (
+	// "github.com/CycloneDX/cyclonedx-go"
+	// "github.com/jfrog/gofrog/datastructures"
 	"github.com/jfrog/jfrog-cli-core/v2/common/format"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	ioUtils "github.com/jfrog/jfrog-client-go/utils/io"
 )
 
 type AuditParams interface {
-	DirectDependencies() *[]string
-	AppendDependenciesForApplicabilityScan(directDependencies []string) *AuditBasicParams
+	// DirectDependencies() *[]string
+	// AppendDependenciesForApplicabilityScan(directDependencies []string) *AuditBasicParams
 	ServerDetails() (*config.ServerDetails, error)
 	SetServerDetails(serverDetails *config.ServerDetails) *AuditBasicParams
 	PipRequirementsFile() string
@@ -48,41 +50,48 @@ type AuditParams interface {
 }
 
 type AuditBasicParams struct {
-	serverDetails                    *config.ServerDetails
-	outputFormat                     format.OutputFormat
-	progress                         ioUtils.ProgressMgr
-	useJas                           bool
-	excludeTestDependencies          bool
-	useWrapper                       bool
-	insecureTls                      bool
-	ignoreConfigFile                 bool
-	isMavenDepTreeInstalled          bool
-	isCurationCmd                    bool
-	maxTreeDepth                     string
-	pipRequirementsFile              string
-	depsRepo                         string
-	installCommandName               string
-	technologies                     []string
-	scansToPerform                   []SubScanType
-	args                             []string
-	installCommandArgs               []string
-	dependenciesForApplicabilityScan []string
-	exclusions                       []string
-	isRecursiveScan                  bool
-	skipAutoInstall                  bool
-	allowPartialResults              bool
-	xrayVersion                      string
-	xscVersion                       string
+	serverDetails           *config.ServerDetails
+	outputFormat            format.OutputFormat
+	progress                ioUtils.ProgressMgr
+	useJas                  bool
+	excludeTestDependencies bool
+	useWrapper              bool
+	insecureTls             bool
+	ignoreConfigFile        bool
+	isMavenDepTreeInstalled bool
+	isCurationCmd           bool
+	maxTreeDepth            string
+	pipRequirementsFile     string
+	depsRepo                string
+	installCommandName      string
+	technologies            []string
+	scansToPerform          []SubScanType
+	args                    []string
+	installCommandArgs      []string
+	// dependenciesForApplicabilityScan *datastructures.Set[string]
+	exclusions          []string
+	isRecursiveScan     bool
+	skipAutoInstall     bool
+	allowPartialResults bool
+	xrayVersion         string
+	xscVersion          string
 }
 
-func (abp *AuditBasicParams) DirectDependencies() *[]string {
-	return &abp.dependenciesForApplicabilityScan
-}
+// func (abp *AuditBasicParams) DirectDependencies() *[]string {
+// 	slice := []string{}
+// 	if abp.dependenciesForApplicabilityScan != nil {
+// 		slice = abp.dependenciesForApplicabilityScan.ToSlice()
+// 	}
+// 	return &slice
+// }
 
-func (abp *AuditBasicParams) AppendDependenciesForApplicabilityScan(directDependencies []string) *AuditBasicParams {
-	abp.dependenciesForApplicabilityScan = append(abp.dependenciesForApplicabilityScan, directDependencies...)
-	return abp
-}
+// func (abp *AuditBasicParams) AppendDependenciesForApplicabilityScan(sbom *cyclonedx.BOM) *AuditBasicParams {
+// 	if abp.dependenciesForApplicabilityScan == nil {
+// 		abp.dependenciesForApplicabilityScan = datastructures.MakeSet[string]()
+// 	}
+// 	abp.dependenciesForApplicabilityScan.AddElements(directDependencies...)
+// 	return abp
+// }
 
 func (abp *AuditBasicParams) ServerDetails() (*config.ServerDetails, error) {
 	return abp.serverDetails, nil

@@ -253,7 +253,8 @@ func ScanCmd(c *components.Context) error {
 		SetPrintExtendedTable(c.GetBoolFlagValue(flags.ExtendedTable)).
 		SetBypassArchiveLimits(c.GetBoolFlagValue(flags.BypassArchiveLimits)).
 		SetFixableOnly(c.GetBoolFlagValue(flags.FixableOnly)).
-		SetMinSeverityFilter(minSeverity)
+		SetMinSeverityFilter(minSeverity).
+		SetScanResultRepository(c.GetStringFlagValue(flags.ScanResultsRepository))
 	if c.IsFlagSet(flags.Watches) {
 		scanCmd.SetWatches(splitByCommaAndTrim(c.GetStringFlagValue(flags.Watches)))
 	}
@@ -408,7 +409,6 @@ func CreateAuditCmd(c *components.Context) (string, string, *coreConfig.ServerDe
 	if err != nil {
 		return "", "", nil, nil, err
 	}
-
 	auditCmd.SetTargetRepoPath(addTrailingSlashToRepoPathIfNeeded(c)).
 		SetProject(getProject(c)).
 		SetIncludeVulnerabilities(c.GetBoolFlagValue(flags.Vuln)).
@@ -419,9 +419,7 @@ func CreateAuditCmd(c *components.Context) (string, string, *coreConfig.ServerDe
 		SetMinSeverityFilter(minSeverity).
 		SetFixableOnly(c.GetBoolFlagValue(flags.FixableOnly)).
 		SetThirdPartyApplicabilityScan(c.GetBoolFlagValue(flags.ThirdPartyContextualAnalysis)).
-		SetScansResultsOutputDir(scansOutputDir).
-		SetSkipAutoInstall(c.GetBoolFlagValue(flags.SkipAutoInstall)).
-		SetAllowPartialResults(c.GetBoolFlagValue(flags.AllowPartialResults))
+		SetScansResultsOutputDir(scansOutputDir).SetScansResultsRepository(c.GetStringFlagValue(flags.ScanResultsRepository))
 
 	if c.GetStringFlagValue(flags.Watches) != "" {
 		auditCmd.SetWatches(splitByCommaAndTrim(c.GetStringFlagValue(flags.Watches)))
@@ -441,7 +439,9 @@ func CreateAuditCmd(c *components.Context) (string, string, *coreConfig.ServerDe
 		SetNpmScope(c.GetStringFlagValue(flags.DepType)).
 		SetPipRequirementsFile(c.GetStringFlagValue(flags.RequirementsFile)).
 		SetMaxTreeDepth(c.GetStringFlagValue(flags.MaxTreeDepth)).
-		SetExclusions(pluginsCommon.GetStringsArrFlagValue(c, flags.Exclusions))
+		SetExclusions(pluginsCommon.GetStringsArrFlagValue(c, flags.Exclusions)).
+		SetSkipAutoInstall(c.GetBoolFlagValue(flags.SkipAutoInstall)).
+		SetAllowPartialResults(c.GetBoolFlagValue(flags.AllowPartialResults))
 	return xrayVersion, xscVersion, serverDetails, auditCmd, err
 }
 
@@ -682,7 +682,8 @@ func DockerScan(c *components.Context, image string) error {
 		SetFixableOnly(c.GetBoolFlagValue(flags.FixableOnly)).
 		SetMinSeverityFilter(minSeverity).
 		SetThreads(threads).
-		SetSecretValidation(c.GetBoolFlagValue(flags.SecretValidation))
+		SetSecretValidation(c.GetBoolFlagValue(flags.SecretValidation)).
+		SetScanResultRepository(c.GetStringFlagValue(flags.ScanResultsRepository))
 	if c.GetStringFlagValue(flags.Watches) != "" {
 		containerScanCommand.SetWatches(splitByCommaAndTrim(c.GetStringFlagValue(flags.Watches)))
 	}
