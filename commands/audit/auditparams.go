@@ -38,7 +38,7 @@ func NewAuditParams() *AuditParams {
 		AuditBasicParams: &xrayutils.AuditBasicParams{},
 	}
 	params.scanStrategy = &JfrogScanGraphStrategy{Params: params}
-	params.bomGenerator = &JfrogBomGenerator{params: params}
+	params.bomGenerator = &JfrogSourceCodeBomGenerator{params: params}
 	return params
 }
 
@@ -56,7 +56,7 @@ func (params *AuditParams) BomGenerator() scaRunner.SbomGenerator {
 // Only npm is supported for this flag.
 func (params *AuditParams) ShouldGetFlatTreeForApplicableScan(tech techutils.Technology) bool {
 	// Check if bomGenerator is set to JfrogBomGenerator type, if not, return false
-	if params.bomGenerator == nil || !(params.bomGenerator.(*JfrogBomGenerator) != nil) {
+	if params.bomGenerator == nil || !(params.bomGenerator.(*JfrogSourceCodeBomGenerator) != nil) {
 		return false
 	}
 	return tech == techutils.Pip || (params.thirdPartyApplicabilityScan && tech == techutils.Npm)

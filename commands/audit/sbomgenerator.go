@@ -38,11 +38,11 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils/xray/scangraph"
 )
 
-type JfrogBomGenerator struct {
+type JfrogSourceCodeBomGenerator struct {
 	params *AuditParams
 }
 
-func (jbg *JfrogBomGenerator) GenerateSbom(target results.ScanTarget) (sbom *cyclonedx.BOM, err error) {
+func (jbg *JfrogSourceCodeBomGenerator) GenerateSbom(target results.ScanTarget) (sbom *cyclonedx.BOM, err error) {
 	// Create the CycloneDX BOM
 	sbom = cyclonedx.NewBOM()
 	wdComponent := bom.CreateWorkingDirComponent(target.Target)
