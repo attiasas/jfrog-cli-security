@@ -9,6 +9,7 @@ import (
 
 	"github.com/CycloneDX/cyclonedx-go"
 
+	clientUtils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
@@ -18,9 +19,19 @@ import (
 )
 
 type JfrogBinaryBomGenerator struct {
-	indexerPath string
-	indexerTempDir string
-	bypassArchiveLimits bool
+	threadId int
+	IndexerPath string
+	IndexerTempDir string
+	BypassArchiveLimits bool
+}
+
+func (jbg *JfrogBinaryBomGenerator) Parallel(threadId int) *JfrogBinaryBomGenerator {
+	return &JfrogBinaryBomGenerator{
+		threadId: threadId,
+		IndexerPath:   jbg.IndexerPath,
+		IndexerTempDir: jbg.IndexerTempDir,
+		BypassArchiveLimits: jbg.BypassArchiveLimits,
+	}
 }
 
 func (jbg *JfrogBinaryBomGenerator) GenerateSbom(target results.ScanTarget) (sbom *cyclonedx.BOM, err error) {
@@ -28,7 +39,8 @@ func (jbg *JfrogBinaryBomGenerator) GenerateSbom(target results.ScanTarget) (sbo
 	sbom = cyclonedx.NewBOM()
 	binaryFileComponent := bom.CreateFileOrDirComponent(target.Target)
 	sbom.Metadata = &cyclonedx.Metadata{Component: &binaryFileComponent}
-	
+
+	log.Info(clientUtils.GetLogMsgPrefix(jbg.threadId, false), fmt.Sprintf("Indexing file: %s", target.Target))
 	graph, err := jbg.indexFile(target.Target)
 	if errorutils.CheckError(err) != nil || graph == nil {
 		return nil, fmt.Errorf("failed to index file %s: %w", target.Target, err)
@@ -37,7 +49,7 @@ func (jbg *JfrogBinaryBomGenerator) GenerateSbom(target results.ScanTarget) (sbo
 	// for instance due to unsupported file format, continue without sending a
 	// graph request to Xray.
 	if graph.Id == "" {
-		log.Debug(fmt.Sprintf("Empty graph returned for file %s", target.Target))
+		log.Debug(clientUtils.GetLogMsgPrefix(jbg.threadId, false), fmt.Sprintf("Empty graph returned for file %s", target.Target))
 		return
 	}
 	sbom.Components, sbom.Dependencies = bom.CompTreeToSbom(graph)
@@ -46,8 +58,8 @@ func (jbg *JfrogBinaryBomGenerator) GenerateSbom(target results.ScanTarget) (sbo
 
 func (jbg *JfrogBinaryBomGenerator) indexFile(filePath string) (*xrayUtils.BinaryGraphNode, error) {
 	var indexerResults xrayUtils.BinaryGraphNode
-	indexerCmd := exec.Command(jbg.indexerPath, indexingCommand, filePath, "--temp-dir", jbg.indexerTempDir)
-	if jbg.bypassArchiveLimits {
+	indexerCmd := exec.Command(jbg.IndexerPath, indexingCommand, filePath, "--temp-dir", jbg.IndexerTempDir)
+	if jbg.BypassArchiveLimits {
 		indexerCmd.Args = append(indexerCmd.Args, "--bypass-archive-limits")
 	}
 	var stderr bytes.Buffer
