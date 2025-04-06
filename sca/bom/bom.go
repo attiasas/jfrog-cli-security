@@ -202,7 +202,46 @@ func getNodeDirectDependencies(node *xrayUtils.GraphNode) (dependencies *[]strin
 	return
 }
 
-func CompTreeToSbom(trees ...*xrayUtils.BinaryGraphNode) (sbom *cyclonedx.BOM) {
+func CompTreeToSbom(trees ...*xrayUtils.BinaryGraphNode) (components *[]cyclonedx.Component, dependencies *[]cyclonedx.Dependency) {
+	parsed := datastructures.MakeSet[string]()
+	components = &[]cyclonedx.Component{}
+	dependencies = &[]cyclonedx.Dependency{}
+	for _, root := range trees {
+		if root.Id != "root" {
+			components, dependencies = getDataFromBinaryNode(root, parsed, components, dependencies)
+			continue
+		}
+		for _, module := range root.Nodes {
+			components, dependencies = getDataFromBinaryNode(module, parsed, components, dependencies)
+		}
+	}
+	return
+}
+
+func getDataFromBinaryNode(node *xrayUtils.BinaryGraphNode, parsed *datastructures.Set[string], components *[]cyclonedx.Component, dependencies *[]cyclonedx.Dependency) (*[]cyclonedx.Component, *[]cyclonedx.Dependency) {
+	if parsed.Exists(node.Id) {
+		// The node was already parsed, no need to parse it again
+		return components, dependencies
+	}
+	parsed.Add(node.Id)
+	// Create a new component and add it to the sbom
+	*components = append(*components, CreateScaComponent(node.Id))
+	if len(node.Nodes) > 0 {
+		// Create a matching dependency entry describing the direct dependencies
+		*dependencies = append(*dependencies, cyclonedx.Dependency{Ref: GetScaComponentRef(node.Id), Dependencies: getNodeDirectBinaryComponents(node)})
+	}
+	// Go through the dependencies and add them to the sbom
+	for _, dependencyNode := range node.Nodes {
+		components, dependencies = getDataFromBinaryNode(dependencyNode, parsed, components, dependencies)
+	}
+	return components, dependencies
+}
+
+func getNodeDirectBinaryComponents(node *xrayUtils.BinaryGraphNode) (dependencies *[]string) {
+	dependencies = &[]string{}
+	for _, dep := range node.Nodes {
+		*dependencies = append(*dependencies, XrayComponentIdToPurl(dep.Id))
+	}
 	return
 }
 
