@@ -23,11 +23,17 @@ import (
 
 // SbomGenerator is an interface for generating SBOMs from different sources.
 type SbomGenerator interface {
+	// Parallel creates a new instance of the generator for parallel execution.
+	Parallel(threadId int) SbomGenerator
+	// GenerateSbom generates a CycloneDX SBOM for the given target.
 	GenerateSbom(target results.ScanTarget) (*cyclonedx.BOM, error)
 }
 
 // SbomScanStrategy is an interface for scanning SBOMs using different strategies.
 type SbomScanStrategy interface {
+	// Parallel creates new instance of Scanner for parallel execution.
+	Parallel(threadId int) SbomScanStrategy
+	// ScaScanTask scans the given SBOM using the specified technology.
 	ScaScanTask(tech techutils.Technology, target *cyclonedx.BOM) ([]services.ScanResponse, error)
 }
 

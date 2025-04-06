@@ -5,6 +5,7 @@ import (
 
 	"github.com/CycloneDX/cyclonedx-go"
 	"github.com/jfrog/jfrog-cli-security/sca/bom"
+	"github.com/jfrog/jfrog-cli-security/sca/runner"
 
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
@@ -19,6 +20,10 @@ import (
 
 type JfrogScanGraphStrategy struct {
 	Params *AuditParams
+}
+
+func (sgs *JfrogScanGraphStrategy) Parallel(threadId int) runner.SbomScanStrategy {
+	return sgs
 }
 
 func (sgs *JfrogScanGraphStrategy) ScaScanTask(tech techutils.Technology, target *cyclonedx.BOM) (techResults []services.ScanResponse, err error) {

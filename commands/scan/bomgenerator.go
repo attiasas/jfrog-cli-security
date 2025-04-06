@@ -19,17 +19,17 @@ import (
 )
 
 type JfrogBinaryBomGenerator struct {
-	threadId int
-	IndexerPath string
-	IndexerTempDir string
+	threadId            int
+	IndexerPath         string
+	IndexerTempDir      string
 	BypassArchiveLimits bool
 }
 
 func (jbg *JfrogBinaryBomGenerator) Parallel(threadId int) *JfrogBinaryBomGenerator {
 	return &JfrogBinaryBomGenerator{
-		threadId: threadId,
-		IndexerPath:   jbg.IndexerPath,
-		IndexerTempDir: jbg.IndexerTempDir,
+		threadId:            threadId,
+		IndexerPath:         jbg.IndexerPath,
+		IndexerTempDir:      jbg.IndexerTempDir,
 		BypassArchiveLimits: jbg.BypassArchiveLimits,
 	}
 }
