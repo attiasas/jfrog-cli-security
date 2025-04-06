@@ -14,6 +14,7 @@ import (
 	"golang.org/x/exp/maps"
 	"golang.org/x/exp/slices"
 
+	"github.com/CycloneDX/cyclonedx-go"
 	jfrogappsconfig "github.com/jfrog/jfrog-apps-config/go"
 	"github.com/jfrog/jfrog-cli-security/jas"
 	"github.com/jfrog/jfrog-cli-security/jas/applicability"
@@ -81,6 +82,9 @@ type ScanCommand struct {
 	xscVersion            string
 	multiScanId           string
 	startTime             time.Time
+	// Dynamic logic params
+	scanStrategy scaRunner.SbomScanStrategy
+	bomGenerator scaRunner.SbomGenerator
 }
 
 func (scanCmd *ScanCommand) SetMinSeverityFilter(minSeverityFilter severityutils.Severity) *ScanCommand {
@@ -396,7 +400,10 @@ func initIndexer(xrayManager *xrayClient.XrayServicesManager, xrayVersion string
 }
 
 func NewScanCommand() *ScanCommand {
-	return &ScanCommand{}
+	return &ScanCommand{
+		bomGenerator: nil,
+		scanStrategy: nil,
+	}
 }
 
 func (scanCmd *ScanCommand) CommandName() string {
@@ -481,7 +488,9 @@ func (scanCmd *ScanCommand) createIndexerHandlerFunc(file *spec.File, cmdResults
 					return targetResults.AddTargetError(fmt.Errorf("%s sca scanning '%s' failed with error: %s", scanLogPrefix, graph.Id, err.Error()), false)
 				} else {
 					targetResults.NewScaScanResults(scaRunner.GetScaScansStatusCode(err, *graphScanResults), *graphScanResults)
-					targetResults.SetSbom(bom.CompTreeToSbom(graph))
+					sbom := cyclonedx.NewBOM()
+					sbom.Components, sbom.Dependencies = bom.CompTreeToSbom(graph)
+					targetResults.SetSbom(sbom)
 					targetResults.Technology = techutils.Technology(graphScanResults.ScannedPackageType)
 				}
 				if !cmdResults.EntitledForJas {
