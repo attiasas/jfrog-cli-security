@@ -132,11 +132,11 @@ func CreateScaComponent(xrayImpactedPackageId string, properties ...cyclonedx.Pr
 	return
 }
 
-func CreateWorkingDirComponent(wd string) (component cyclonedx.Component) {
+func CreateFileOrDirComponent(location string) (component cyclonedx.Component) {
 	component = cyclonedx.Component{
-		BOMRef: GetFileRef(wd),
+		BOMRef: GetFileRef(location),
 		Type:   cyclonedx.ComponentTypeFile,
-		Name:   wd,
+		Name:   location,
 	}
 	return
 }

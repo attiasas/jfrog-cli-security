@@ -45,7 +45,7 @@ type JfrogSourceCodeBomGenerator struct {
 func (jbg *JfrogSourceCodeBomGenerator) GenerateSbom(target results.ScanTarget) (sbom *cyclonedx.BOM, err error) {
 	// Create the CycloneDX BOM
 	sbom = cyclonedx.NewBOM()
-	wdComponent := bom.CreateWorkingDirComponent(target.Target)
+	wdComponent := bom.CreateFileOrDirComponent(target.Target)
 	sbom.Metadata = &cyclonedx.Metadata{Component: &wdComponent}
 
 	// Make sure to return to the original working directory, buildDependencyTree may change it

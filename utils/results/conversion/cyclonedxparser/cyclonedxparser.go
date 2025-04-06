@@ -66,7 +66,7 @@ func (cdc *CmdResultsCycloneDxConverter) ParseNewTargetResults(target results.Sc
 	if cdc.bom == nil {
 		return results.ErrResetConvertor
 	}
-	component := bom.CreateWorkingDirComponent(target.Target)
+	component := bom.CreateFileOrDirComponent(target.Target)
 	if cdc.bom.Metadata.Component == nil {
 		// Single target
 		cdc.bom.Metadata.Component = &component
@@ -82,7 +82,7 @@ func (cdc *CmdResultsCycloneDxConverter) ParseNewTargetResults(target results.Sc
 		if currentWd, e := os.Getwd(); e != nil {
 			return e
 		} else {
-			wdComponent := bom.CreateWorkingDirComponent(currentWd)
+			wdComponent := bom.CreateFileOrDirComponent(currentWd)
 			// Add the old main component as a sub-component
 			wdComponent.Components = &[]cyclonedx.Component{*cdc.bom.Metadata.Component}
 			// Set the current working directory as the main component
