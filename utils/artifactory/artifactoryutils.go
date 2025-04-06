@@ -90,6 +90,9 @@ func UploadFile(location, repo string, serverDetails *config.ServerDetails) (err
 }
 
 func CreateRepository(repoKey string, serverDetails *config.ServerDetails, xrayIndex bool) (err error) {
+	if repoKey == "" || serverDetails == nil {
+		return errors.New("repository key and server details must be provided")
+	}
 	servicesManager, err := artifactoryUtils.CreateServiceManager(serverDetails, -1, 0, false)
 	if err != nil {
 		return

@@ -420,6 +420,10 @@ func (rw *ResultsWriter) UploadCdxScanResults(serverDetails *config.ServerDetail
 		// No need to upload the scan results
 		return
 	}
+	if rw.commandResults.GetErrors() != nil {
+		log.Debug("Skipping upload of CycloneDX file due to errors")
+		return
+	}
 	// Resolve the output directory for the scan results
 	directory := scanResultsOutputDir
 	if directory == "" {
