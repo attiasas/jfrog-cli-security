@@ -7,9 +7,9 @@ import (
 	"github.com/owenrumney/go-sarif/v2/sarif"
 	"golang.org/x/exp/maps"
 
-	"github.com/jfrog/jfrog-cli-security/sca/bom"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
+	"github.com/jfrog/jfrog-cli-security/utils/formats/cdx"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/results/conversion/simplejsonparser"
 
@@ -84,7 +84,7 @@ func (tc *CmdResultsTableConverter) ParseSbom(_ results.ScanTarget, sbom *cyclon
 			return
 		}
 		id := component.PackageURL
-		currName, currVersion, currType := bom.SplitPackageURL(id)
+		currName, currVersion, currType := cdx.SplitPackageURL(id)
 		entry := formats.SbomTableRow{Component: currName, Version: currVersion, PackageType: currType, Relation: getDirectStr(isDirect), Direct: isDirect}
 		if parsedEntry, exists := tc.sbomInfo[id]; exists {
 			if entry.Direct && !parsedEntry.Direct {

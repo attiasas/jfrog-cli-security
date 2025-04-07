@@ -15,8 +15,8 @@ import (
 	"github.com/jfrog/jfrog-client-go/xray/services"
 	xscServices "github.com/jfrog/jfrog-client-go/xsc/services"
 
-	"github.com/jfrog/jfrog-cli-security/sca/bom"
 	"github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-cli-security/utils/formats/cdx"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 )
@@ -93,7 +93,7 @@ func createScaScanTask(auditParallelRunner *utils.SecurityParallelRunner, target
 		// SCA Scan the target.
 		scanResults, xrayErr := strategy.ScaScanTask(targetResult.Technology, targetResult.Sbom)
 		// We add the results before checking for errors, so we can display the results even if an error occurred.
-		targetResult.NewScaScanResults(GetScaScansStatusCode(xrayErr, scanResults...), scanResults...).IsMultipleRootProject = clientUtils.Pointer(bom.IsMultiProject(targetResult.Sbom))
+		targetResult.NewScaScanResults(GetScaScansStatusCode(xrayErr, scanResults...), scanResults...).IsMultipleRootProject = clientUtils.Pointer(cdx.IsMultiProject(targetResult.Sbom))
 		if xrayErr != nil {
 			return fmt.Errorf("%s Xray dependency tree scan request on '%s' failed:\n%s", clientUtils.GetLogMsgPrefix(threadId, false), targetResult.Technology, xrayErr.Error())
 		}

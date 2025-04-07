@@ -29,10 +29,10 @@ import (
 	"github.com/jfrog/jfrog-cli-security/commands/audit/sca/swift"
 	"github.com/jfrog/jfrog-cli-security/commands/audit/sca/yarn"
 
-	"github.com/jfrog/jfrog-cli-security/sca/bom"
 	"github.com/jfrog/jfrog-cli-security/sca/runner"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/artifactory"
+	"github.com/jfrog/jfrog-cli-security/utils/formats/cdx"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/jfrog/jfrog-cli-security/utils/xray"
@@ -50,7 +50,7 @@ func (jbg *JfrogSourceCodeBomGenerator) Parallel(threadId int) runner.SbomGenera
 func (jbg *JfrogSourceCodeBomGenerator) GenerateSbom(target results.ScanTarget) (sbom *cyclonedx.BOM, err error) {
 	// Create the CycloneDX BOM
 	sbom = cyclonedx.NewBOM()
-	wdComponent := bom.CreateFileOrDirComponent(target.Target)
+	wdComponent := cdx.CreateFileOrDirComponent(target.Target)
 	sbom.Metadata = &cyclonedx.Metadata{Component: &wdComponent}
 
 	// Make sure to return to the original working directory, buildDependencyTree may change it
@@ -73,7 +73,7 @@ func (jbg *JfrogSourceCodeBomGenerator) GenerateSbom(target results.ScanTarget) 
 		err = fmt.Errorf("failed to build dependency tree: %s", bdtErr.Error())
 		return
 	}
-	sbom.Components, sbom.Dependencies = bom.DepsTreeToSbom(treeResult.FullDepTrees...)
+	sbom.Components, sbom.Dependencies = cdx.DepsTreeToSbom(treeResult.FullDepTrees...)
 	return
 }
 

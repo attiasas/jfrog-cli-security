@@ -4,8 +4,8 @@ import (
 	"fmt"
 
 	"github.com/CycloneDX/cyclonedx-go"
-	"github.com/jfrog/jfrog-cli-security/sca/bom"
 	"github.com/jfrog/jfrog-cli-security/sca/runner"
+	"github.com/jfrog/jfrog-cli-security/utils/formats/cdx"
 
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
@@ -32,7 +32,7 @@ func (sgs *JfrogScanGraphStrategy) ScaScanTask(tech techutils.Technology, target
 	if err != nil {
 		return
 	}
-	flatDepTree, fullDepTree := bom.BomToTree(target)
+	flatDepTree, fullDepTree := cdx.BomToTree(target)
 	// Create the scan graph parameters.
 	xrayScanGraphParams := sgs.Params.createXrayGraphScanParams()
 	xrayScanGraphParams.MultiScanId = sgs.Params.GetMultiScanId()

@@ -10,8 +10,8 @@ import (
 	"github.com/CycloneDX/cyclonedx-go"
 	"github.com/jfrog/gofrog/datastructures"
 	jfrogappsconfig "github.com/jfrog/jfrog-apps-config/go"
-	"github.com/jfrog/jfrog-cli-security/sca/bom"
 	"github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-cli-security/utils/formats/cdx"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
@@ -343,9 +343,9 @@ func (sr *TargetResults) GetDependenciesForApplicabilityScan(flatTree bool) (sli
 		return
 	}
 	if flatTree {
-		slice = bom.BomToFlatCompIds(sr.Sbom)
+		slice = cdx.BomToFlatCompIds(sr.Sbom)
 	} else {
-		slice = bom.BomToDirectCompIds(sr.Sbom)
+		slice = cdx.BomToDirectCompIds(sr.Sbom)
 	}
 	return
 }

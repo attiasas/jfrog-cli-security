@@ -17,8 +17,8 @@ import (
 	"github.com/jfrog/jfrog-cli-security/jas/applicability"
 	"github.com/jfrog/jfrog-cli-security/jas/runner"
 	"github.com/jfrog/jfrog-cli-security/jas/secrets"
-	"github.com/jfrog/jfrog-cli-security/sca/bom"
 	scaRunner "github.com/jfrog/jfrog-cli-security/sca/runner"
+	"github.com/jfrog/jfrog-cli-security/utils/formats/cdx"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/results/output"
 	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
@@ -464,7 +464,7 @@ func (scanCmd *ScanCommand) createIndexerHandlerFunc(file *spec.File, cmdResults
 			taskFunc := func(scanThreadId int) (err error) {
 				scanLogPrefix := clientutils.GetLogMsgPrefix(scanThreadId, false)
 				params := &services.XrayGraphScanParams{
-					BinaryGraph:            bom.BomToFullCompTree(sbom),
+					BinaryGraph:            cdx.BomToFullCompTree(sbom),
 					RepoPath:               getXrayRepoPathFromTarget(file.Target),
 					Watches:                scanCmd.resultsContext.Watches,
 					IncludeLicenses:        scanCmd.resultsContext.IncludeLicenses,

@@ -14,8 +14,8 @@ import (
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 
-	"github.com/jfrog/jfrog-cli-security/sca/bom"
 	"github.com/jfrog/jfrog-cli-security/sca/runner"
+	"github.com/jfrog/jfrog-cli-security/utils/formats/cdx"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 )
 
@@ -38,7 +38,7 @@ func (jbg *JfrogBinaryBomGenerator) Parallel(threadId int) runner.SbomGenerator 
 func (jbg *JfrogBinaryBomGenerator) GenerateSbom(target results.ScanTarget) (sbom *cyclonedx.BOM, err error) {
 	// Create the CycloneDX BOM
 	sbom = cyclonedx.NewBOM()
-	binaryFileComponent := bom.CreateFileOrDirComponent(target.Target)
+	binaryFileComponent := cdx.CreateFileOrDirComponent(target.Target)
 	sbom.Metadata = &cyclonedx.Metadata{Component: &binaryFileComponent}
 
 	log.Info(clientUtils.GetLogMsgPrefix(jbg.threadId, false), fmt.Sprintf("Indexing file: %s", target.Target))
@@ -53,7 +53,7 @@ func (jbg *JfrogBinaryBomGenerator) GenerateSbom(target results.ScanTarget) (sbo
 		log.Debug(clientUtils.GetLogMsgPrefix(jbg.threadId, false), fmt.Sprintf("Empty graph returned for file %s", target.Target))
 		return
 	}
-	sbom.Components, sbom.Dependencies = bom.CompTreeToSbom(graph)
+	sbom.Components, sbom.Dependencies = cdx.CompTreeToSbom(graph)
 	return
 }
 

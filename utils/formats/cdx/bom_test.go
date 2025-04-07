@@ -1,4 +1,4 @@
-package bom
+package cdx
 
 // import (
 // 	"testing"
