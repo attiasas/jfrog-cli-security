@@ -62,8 +62,8 @@ type ScanCommand struct {
 	spec          *spec.SpecFiles
 	threads       int
 	// The location of the downloaded Xray indexer binary on the local file system.
-	indexerPath         string
-	indexerTempDir      string
+	// indexerPath         string
+	// indexerTempDir      string
 	outputFormat        format.OutputFormat
 	minSeverityFilter   severityutils.Severity
 	fail                bool
@@ -200,33 +200,33 @@ func (scanCmd *ScanCommand) SetScanResultRepository(repository string) *ScanComm
 	return scanCmd
 }
 
-func (scanCmd *ScanCommand) indexFile(filePath string) (*xrayUtils.BinaryGraphNode, error) {
-	var indexerResults xrayUtils.BinaryGraphNode
-	indexerCmd := exec.Command(scanCmd.indexerPath, indexingCommand, filePath, "--temp-dir", scanCmd.indexerTempDir)
-	if scanCmd.bypassArchiveLimits {
-		indexerCmd.Args = append(indexerCmd.Args, "--bypass-archive-limits")
-	}
-	var stderr bytes.Buffer
-	var stdout bytes.Buffer
-	indexerCmd.Stdout = &stdout
-	indexerCmd.Stderr = &stderr
-	err := indexerCmd.Run()
-	if err != nil {
-		var e *exec.ExitError
-		if errors.As(err, &e) {
-			if e.ExitCode() == fileNotSupportedExitCode {
-				log.Debug(fmt.Sprintf("File %s is not supported by Xray indexer app.", filePath))
-				return &indexerResults, nil
-			}
-		}
-		return nil, errorutils.CheckErrorf("Xray indexer app failed indexing %s with %s: %s", filePath, err, stderr.String())
-	}
-	if stderr.String() != "" {
-		log.Info(stderr.String())
-	}
-	err = json.Unmarshal(stdout.Bytes(), &indexerResults)
-	return &indexerResults, errorutils.CheckError(err)
-}
+// func (scanCmd *ScanCommand) indexFile(filePath string) (*xrayUtils.BinaryGraphNode, error) {
+// 	var indexerResults xrayUtils.BinaryGraphNode
+// 	indexerCmd := exec.Command(scanCmd.indexerPath, indexingCommand, filePath, "--temp-dir", scanCmd.indexerTempDir)
+// 	if scanCmd.bypassArchiveLimits {
+// 		indexerCmd.Args = append(indexerCmd.Args, "--bypass-archive-limits")
+// 	}
+// 	var stderr bytes.Buffer
+// 	var stdout bytes.Buffer
+// 	indexerCmd.Stdout = &stdout
+// 	indexerCmd.Stderr = &stderr
+// 	err := indexerCmd.Run()
+// 	if err != nil {
+// 		var e *exec.ExitError
+// 		if errors.As(err, &e) {
+// 			if e.ExitCode() == fileNotSupportedExitCode {
+// 				log.Debug(fmt.Sprintf("File %s is not supported by Xray indexer app.", filePath))
+// 				return &indexerResults, nil
+// 			}
+// 		}
+// 		return nil, errorutils.CheckErrorf("Xray indexer app failed indexing %s with %s: %s", filePath, err, stderr.String())
+// 	}
+// 	if stderr.String() != "" {
+// 		log.Info(stderr.String())
+// 	}
+// 	err = json.Unmarshal(stdout.Bytes(), &indexerResults)
+// 	return &indexerResults, errorutils.CheckError(err)
+// }
 
 func (scanCmd *ScanCommand) Run() (err error) {
 	return scanCmd.RunAndRecordResults(utils.Binary, scanCmd.recordResults)
@@ -311,12 +311,15 @@ func (scanCmd *ScanCommand) RunScan(cmdType utils.CommandType) (cmdResults *resu
 			return jas.DownloadAnalyzerManagerIfNeeded(0)
 		})
 	}
+
+	// scanCmd.scanStrategy =
 	// Initialize the Xray Indexer
 	if indexerPath, indexerTempDir, cleanUp, err := initIndexer(xrayManager, cmdResults.XrayVersion); err != nil {
 		return cmdResults.AddGeneralError(err, false)
 	} else {
-		scanCmd.indexerPath = indexerPath
-		scanCmd.indexerTempDir = indexerTempDir
+		scanCmd.bomGenerator = &JfrogBinaryBomGenerator{IndexerPath: indexerPath, IndexerTempDir: indexerTempDir, BypassArchiveLimits: scanCmd.bypassArchiveLimits}
+		// scanCmd.indexerPath = indexerPath
+		// scanCmd.indexerTempDir = indexerTempDir
 		defer cleanUp()
 	}
 	threads := 1
@@ -400,10 +403,7 @@ func initIndexer(xrayManager *xrayClient.XrayServicesManager, xrayVersion string
 }
 
 func NewScanCommand() *ScanCommand {
-	return &ScanCommand{
-		bomGenerator: nil,
-		scanStrategy: nil,
-	}
+	return &ScanCommand{}
 }
 
 func (scanCmd *ScanCommand) CommandName() string {
@@ -439,28 +439,36 @@ func (scanCmd *ScanCommand) createIndexerHandlerFunc(file *spec.File, cmdResults
 		return func(threadId int) (err error) {
 			// Create a scan target for the file.
 			targetResults := cmdResults.NewScanResults(results.ScanTarget{Target: filePath, Name: scanCmd.getBinaryTargetName(filePath)})
-			log.Info(clientutils.GetLogMsgPrefix(threadId, false), "Indexing file:", targetResults.Target)
 			if scanCmd.progress != nil {
 				scanCmd.progress.SetHeadlineMsg("Indexing file: " + targetResults.Name + " 🗄")
 			}
+			// Generate SBOM for the file.
+			sbom, err := scanCmd.bomGenerator.Parallel(threadId).GenerateSbom(targetResults.ScanTarget)
+			if err != nil {
+				return targetResults.AddTargetError(fmt.Errorf("failed to generate SBOM: %s", err.Error()), false)
+			}
+			targetResults.SetSbom(sbom)
+			// Scan the file
+
+			// log.Info(clientutils.GetLogMsgPrefix(threadId, false), "Indexing file:", targetResults.Target)
 			// Index the file and get the dependencies graph.
 			// TODO: create indexer strategy
-			graph, err := scanCmd.indexFile(targetResults.Target)
-			if err != nil {
-				return targetResults.AddTargetError(err, false)
-			}
-			// In case of empty graph returned by the indexer,
-			// for instance due to unsupported file format, continue without sending a
-			// graph request to Xray.
-			if graph.Id == "" {
-				return
-			}
+			// graph, err := scanCmd.indexFile(targetResults.Target)
+			// if err != nil {
+			// 	return targetResults.AddTargetError(err, false)
+			// }
+			// // In case of empty graph returned by the indexer,
+			// // for instance due to unsupported file format, continue without sending a
+			// // graph request to Xray.
+			// if graph.Id == "" {
+			// 	return
+			// }
 			// Add a new task to the second producer/consumer
 			// which will send the indexed binary to Xray and then will store the received result.
 			taskFunc := func(scanThreadId int) (err error) {
 				scanLogPrefix := clientutils.GetLogMsgPrefix(scanThreadId, false)
 				params := &services.XrayGraphScanParams{
-					BinaryGraph:            graph,
+					BinaryGraph:            bom.BomToFullCompTree(sbom),
 					RepoPath:               getXrayRepoPathFromTarget(file.Target),
 					Watches:                scanCmd.resultsContext.Watches,
 					IncludeLicenses:        scanCmd.resultsContext.IncludeLicenses,
@@ -488,9 +496,9 @@ func (scanCmd *ScanCommand) createIndexerHandlerFunc(file *spec.File, cmdResults
 					return targetResults.AddTargetError(fmt.Errorf("%s sca scanning '%s' failed with error: %s", scanLogPrefix, graph.Id, err.Error()), false)
 				} else {
 					targetResults.NewScaScanResults(scaRunner.GetScaScansStatusCode(err, *graphScanResults), *graphScanResults)
-					sbom := cyclonedx.NewBOM()
-					sbom.Components, sbom.Dependencies = bom.CompTreeToSbom(graph)
-					targetResults.SetSbom(sbom)
+					// sbom := cyclonedx.NewBOM()
+					// sbom.Components, sbom.Dependencies = bom.CompTreeToSbom(graph)
+					// targetResults.SetSbom(sbom)
 					targetResults.Technology = techutils.Technology(graphScanResults.ScannedPackageType)
 				}
 				if !cmdResults.EntitledForJas {

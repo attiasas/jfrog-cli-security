@@ -3,6 +3,7 @@ package bom
 import (
 	"fmt"
 	"net/url"
+	"strings"
 
 	"github.com/CycloneDX/cyclonedx-go"
 	"github.com/package-url/packageurl-go"
@@ -109,14 +110,6 @@ func GetScaComponentRef(xrayImpactedPackageId string) string {
 	return ToPackageUrl(compName, compVersion, techutils.ToGdxPackageType(compType))
 }
 
-func GetFileRef(filePath string) string {
-	wdRef, err := utils.Md5Hash(filePath)
-	if err != nil {
-		return filePath
-	}
-	return wdRef
-}
-
 func CreateScaComponent(xrayImpactedPackageId string, properties ...cyclonedx.Property) (component cyclonedx.Component) {
 	compName, compVersion, compType := techutils.SplitComponentIdRaw(xrayImpactedPackageId)
 	component = cyclonedx.Component{
@@ -139,6 +132,25 @@ func CreateFileOrDirComponent(location string) (component cyclonedx.Component) {
 		Name:   location,
 	}
 	return
+}
+
+func GetIdRef(id string) string {
+	return fmt.Sprintf("urn:uuid:%s", id)
+}
+// Extract from format urn:uuid:<id> to <id>
+func ExtractId(idRef string) string {
+	if !strings.HasPrefix(idRef, "urn:uuid:") {
+		return idRef
+	}
+	return strings.TrimPrefix(idRef, "urn:uuid:")
+}
+
+func GetFileRef(filePath string) string {
+	wdRef, err := utils.Md5Hash(filePath)
+	if err != nil {
+		return filePath
+	}
+	return wdRef
 }
 
 func IsMultiProject(sbom *cyclonedx.BOM) bool {
@@ -260,6 +272,16 @@ func BomToFullTree(sbom *cyclonedx.BOM) (fullDependencyTrees []*xrayUtils.GraphN
 	return
 }
 
+func populateDepsNodeDataFromBom(node *xrayUtils.GraphNode, sbom *cyclonedx.BOM) {
+	for _, dep := range getDirectDependencies(sbom, node.Id) {
+		depNode := &xrayUtils.GraphNode{Id: dep, Parent: node}
+		// Add the dependency to the current node
+		node.Nodes = append(node.Nodes, depNode)
+		// Recursively populate the node data
+		populateDepsNodeDataFromBom(depNode, sbom)
+	}
+}
+
 func ReduceToRoots(dependencies *[]cyclonedx.Dependency) (roots []cyclonedx.Dependency) {
 	roots = []cyclonedx.Dependency{}
 	if dependencies == nil {
@@ -287,13 +309,36 @@ func ReduceToRoots(dependencies *[]cyclonedx.Dependency) (roots []cyclonedx.Depe
 	return
 }
 
-func populateDepsNodeDataFromBom(node *xrayUtils.GraphNode, sbom *cyclonedx.BOM) {
-	for _, dep := range getDirectDependencies(sbom, node.Id) {
-		depNode := &xrayUtils.GraphNode{Id: dep, Parent: node}
+func BomToFullCompTree(sbom *cyclonedx.BOM) (fullDependencyTree *xrayUtils.BinaryGraphNode) {
+	fullDependencyTrees := []*xrayUtils.BinaryGraphNode{}
+	for _, rootEntry := range ReduceToRoots(sbom.Dependencies) {
+		currentTree := &xrayUtils.BinaryGraphNode{Id: rootEntry.Ref}
+		// Populate application tree
+		populateCompsNodeDataFromBom(currentTree, sbom)
+		// Add the tree to the output list
+		fullDependencyTrees = append(fullDependencyTrees, currentTree)
+	}
+	if len(fullDependencyTrees) == 1 {
+		// Only one tree found, return it
+		fullDependencyTree = fullDependencyTrees[0]
+	} else if len(fullDependencyTrees) > 1 {
+		// More than one tree found, create root node and add all trees to it
+		id := "root"
+		if sbom != nil && sbom.Metadata != nil && sbom.Metadata.Component != nil {
+			id = sbom.Metadata.Component.Name
+		}
+		fullDependencyTree = &xrayUtils.BinaryGraphNode{Id: id, Nodes: fullDependencyTrees}
+	}
+	return
+}
+
+func populateCompsNodeDataFromBom(node *xrayUtils.BinaryGraphNode, sbom *cyclonedx.BOM) {
+	for _, depRef := range getDirectDependencies(sbom, node.Id) {
+		depNode := &xrayUtils.BinaryGraphNode{Id: depRef}
 		// Add the dependency to the current node
 		node.Nodes = append(node.Nodes, depNode)
 		// Recursively populate the node data
-		populateDepsNodeDataFromBom(depNode, sbom)
+		populateCompsNodeDataFromBom(depNode, sbom)
 	}
 }
 
@@ -328,9 +373,8 @@ func BomToFlatCompTree(sbom *cyclonedx.BOM) (flatTree *xrayUtils.BinaryGraphNode
 
 func BomToFlatCompIds(sbom *cyclonedx.BOM) (flatDepList *[]string) {
 	flatDepList = &[]string{}
-	for _, component := range getUniqueXrayCompIds(sbom) {
-		*flatDepList = append(*flatDepList, component)
-	}
+	// Append all unique Xray component IDs to the flatDepList in one step
+	*flatDepList = append(*flatDepList, getUniqueXrayCompIds(sbom)...)
 	return
 }
 
