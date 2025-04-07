@@ -3,7 +3,6 @@ package bom
 import (
 	"fmt"
 	"net/url"
-	"strings"
 
 	"github.com/CycloneDX/cyclonedx-go"
 	"github.com/package-url/packageurl-go"
@@ -137,13 +136,6 @@ func CreateFileOrDirComponent(location string) (component cyclonedx.Component) {
 func GetIdRef(id string) string {
 	return fmt.Sprintf("urn:uuid:%s", id)
 }
-// Extract from format urn:uuid:<id> to <id>
-func ExtractId(idRef string) string {
-	if !strings.HasPrefix(idRef, "urn:uuid:") {
-		return idRef
-	}
-	return strings.TrimPrefix(idRef, "urn:uuid:")
-}
 
 func GetFileRef(filePath string) string {
 	wdRef, err := utils.Md5Hash(filePath)
@@ -154,7 +146,7 @@ func GetFileRef(filePath string) string {
 }
 
 func IsMultiProject(sbom *cyclonedx.BOM) bool {
-	return len(ReduceToRoots(sbom.Dependencies)) > 1
+	return len(ReduceToRoots(sbom)) > 1
 }
 
 func SearchDependencyEntry(dependencies *[]cyclonedx.Dependency, ref string) *cyclonedx.Dependency {
@@ -262,7 +254,7 @@ func BomToTree(sbom *cyclonedx.BOM) (flatTree *xrayUtils.GraphNode, fullDependen
 }
 
 func BomToFullTree(sbom *cyclonedx.BOM) (fullDependencyTrees []*xrayUtils.GraphNode) {
-	for _, rootEntry := range ReduceToRoots(sbom.Dependencies) {
+	for _, rootEntry := range ReduceToRoots(sbom) {
 		currentTree := &xrayUtils.GraphNode{Id: rootEntry.Ref}
 		// Populate application tree
 		populateDepsNodeDataFromBom(currentTree, sbom)
@@ -282,15 +274,19 @@ func populateDepsNodeDataFromBom(node *xrayUtils.GraphNode, sbom *cyclonedx.BOM)
 	}
 }
 
-func ReduceToRoots(dependencies *[]cyclonedx.Dependency) (roots []cyclonedx.Dependency) {
+func ReduceToRoots(sbom *cyclonedx.BOM) (roots []cyclonedx.Dependency) {
+	dependencies := sbom.Dependencies
 	roots = []cyclonedx.Dependency{}
-	if dependencies == nil {
+	if sbom.Dependencies == nil || len(*dependencies) == 0 {
+		// If no dependencies are found, return an empty list
 		return
 	}
 	// Set to track all references that are listed in `dependsOn`
+	deps := datastructures.MakeSet[string]()
 	dependedRefs := datastructures.MakeSet[string]()
 	// Populate the maps
 	for _, dep := range *dependencies {
+		deps.Add(dep.Ref)
 		if dep.Dependencies == nil {
 			// No dependencies, continue
 			continue
@@ -299,19 +295,80 @@ func ReduceToRoots(dependencies *[]cyclonedx.Dependency) (roots []cyclonedx.Depe
 			dependedRefs.Add(dependsOn)
 		}
 	}
+	ids := getLibraryComponentRefs(sbom)
+	if len(ids) == 0 {
+		// If no library components are found, use the dependencies as IDs
+		ids = deps.ToSlice()
+	}
 	// Identify root dependencies (those not listed in any `dependsOn`)
-	for _, dep := range *dependencies {
-		if !dependedRefs.Exists(dep.Ref) {
+	for _, id := range ids {
+		if dep := GetDependencyEntry(sbom, id); dep != nil && !dependedRefs.Exists(dep.Ref) {
 			// This is a root dependency, add it
-			roots = append(roots, dep)
+			roots = append(roots, *dep)
 		}
 	}
 	return
 }
 
+func getLibraryComponentRefs(sbom *cyclonedx.BOM) (libraryComponentIds []string) {
+	libraryComponentIds = []string{}
+	if sbom == nil || sbom.Components == nil || len(*sbom.Components) == 0 {
+		return
+	}
+	for _, component := range *sbom.Components {
+		if component.Type == cyclonedx.ComponentTypeLibrary {
+			libraryComponentIds = append(libraryComponentIds, component.BOMRef)
+		}
+	}
+	return
+}
+
+func GetComponentIndex(sbom *cyclonedx.BOM, ref string) int {
+	if sbom == nil || sbom.Components == nil || len(*sbom.Components) == 0 {
+		return -1
+	}
+	for i, component := range *sbom.Components {
+		if component.BOMRef == ref {
+			return i
+		}
+	}
+	return -1
+}
+
+func GetComponent(sbom *cyclonedx.BOM, ref string) *cyclonedx.Component {
+	if sbom == nil || sbom.Components == nil || len(*sbom.Components) == 0 {
+		return nil
+	}
+	index := GetComponentIndex(sbom, ref)
+	if index == -1 {
+		return nil
+	}
+	return &(*sbom.Components)[index]
+}
+
+func GetComponentByIndex(sbom *cyclonedx.BOM, index int) *cyclonedx.Component {
+	if sbom == nil || sbom.Components == nil || len(*sbom.Components) == 0 || index < 0 || index >= len(*sbom.Components) {
+		// Invalid index, return nil
+		return nil
+	}
+	return &(*sbom.Components)[index]
+}
+
+func GetDependencyEntry(sbom *cyclonedx.BOM, ref string) *cyclonedx.Dependency {
+	if sbom == nil || sbom.Dependencies == nil || len(*sbom.Dependencies) == 0 {
+		return nil
+	}
+	for _, dependency := range *sbom.Dependencies {
+		if dependency.Ref == ref {
+			return &dependency
+		}
+	}
+	return nil
+}
+
 func BomToFullCompTree(sbom *cyclonedx.BOM) (fullDependencyTree *xrayUtils.BinaryGraphNode) {
 	fullDependencyTrees := []*xrayUtils.BinaryGraphNode{}
-	for _, rootEntry := range ReduceToRoots(sbom.Dependencies) {
+	for _, rootEntry := range ReduceToRoots(sbom) {
 		currentTree := &xrayUtils.BinaryGraphNode{Id: rootEntry.Ref}
 		// Populate application tree
 		populateCompsNodeDataFromBom(currentTree, sbom)
@@ -393,7 +450,7 @@ func getUniqueXrayCompIds(sbom *cyclonedx.BOM) (uniqueCompIds []string) {
 
 func BomToDirectCompIds(sbom *cyclonedx.BOM) (directDepList *[]string) {
 	directDepList = &[]string{}
-	for _, root := range ReduceToRoots(sbom.Dependencies) {
+	for _, root := range ReduceToRoots(sbom) {
 		if root.Dependencies == nil {
 			continue
 		}

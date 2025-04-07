@@ -1,8 +1,6 @@
 package scan
 
 import (
-	"bytes"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os/exec"
@@ -14,7 +12,6 @@ import (
 	"golang.org/x/exp/maps"
 	"golang.org/x/exp/slices"
 
-	"github.com/CycloneDX/cyclonedx-go"
 	jfrogappsconfig "github.com/jfrog/jfrog-apps-config/go"
 	"github.com/jfrog/jfrog-cli-security/jas"
 	"github.com/jfrog/jfrog-cli-security/jas/applicability"
@@ -29,7 +26,6 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils/xray"
 	"github.com/jfrog/jfrog-cli-security/utils/xray/scangraph"
 	"github.com/jfrog/jfrog-cli-security/utils/xsc"
-	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/jfrog/gofrog/parallel"
@@ -493,7 +489,7 @@ func (scanCmd *ScanCommand) createIndexerHandlerFunc(file *spec.File, cmdResults
 				}
 				graphScanResults, err := scangraph.RunScanGraphAndGetResults(scanGraphParams, xrayManager)
 				if err != nil {
-					return targetResults.AddTargetError(fmt.Errorf("%s sca scanning '%s' failed with error: %s", scanLogPrefix, graph.Id, err.Error()), false)
+					return targetResults.AddTargetError(fmt.Errorf("%s sca scanning '%s' failed with error: %s", scanLogPrefix, sbom.SerialNumber, err.Error()), false)
 				} else {
 					targetResults.NewScaScanResults(scaRunner.GetScaScansStatusCode(err, *graphScanResults), *graphScanResults)
 					// sbom := cyclonedx.NewBOM()

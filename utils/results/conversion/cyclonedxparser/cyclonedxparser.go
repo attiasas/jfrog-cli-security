@@ -102,24 +102,24 @@ func (cdc *CmdResultsCycloneDxConverter) ParseNewTargetResults(target results.Sc
 	return
 }
 
-func (cdc *CmdResultsCycloneDxConverter) getExistingComponentIndex(ref string) int {
-	if cdc.bom == nil || cdc.bom.Components == nil {
-		return -1
-	}
-	for i, component := range *cdc.bom.Components {
-		if component.BOMRef == ref {
-			return i
-		}
-	}
-	return -1
-}
+// func (cdc *CmdResultsCycloneDxConverter) getExistingComponentIndex(ref string) int {
+// 	if cdc.bom == nil || cdc.bom.Components == nil {
+// 		return -1
+// 	}
+// 	for i, component := range *cdc.bom.Components {
+// 		if component.BOMRef == ref {
+// 			return i
+// 		}
+// 	}
+// 	return -1
+// }
 
-func (cdc *CmdResultsCycloneDxConverter) getExistingComponent(index int) *cyclonedx.Component {
-	if cdc.bom == nil || cdc.bom.Components == nil || index < 0 || index >= len(*cdc.bom.Components) {
-		return nil
-	}
-	return &(*cdc.bom.Components)[index]
-}
+// func (cdc *CmdResultsCycloneDxConverter) getExistingComponent(index int) *cyclonedx.Component {
+// 	if cdc.bom == nil || cdc.bom.Components == nil || index < 0 || index >= len(*cdc.bom.Components) {
+// 		return nil
+// 	}
+// 	return &(*cdc.bom.Components)[index]
+// }
 
 func (cdc *CmdResultsCycloneDxConverter) ParseScaIssues(target results.ScanTarget, violations bool, scaResponse results.ScanResult[services.ScanResponse], applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
 	if cdc.bom == nil {
@@ -130,7 +130,7 @@ func (cdc *CmdResultsCycloneDxConverter) ParseScaIssues(target results.ScanTarge
 		func(vulnerability services.Vulnerability, cves []formats.CveRow, applicabilityStatus jasutils.ApplicabilityStatus, severity severityutils.Severity, impactedPackagesId string, fixedVersion []string, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) (e error) {
 			// Create or get the affected component
 			affectedComponentIndex := cdc.getOrCreateScaComponent(impactedPackagesId)
-			affectedComponent := cdc.getExistingComponent(affectedComponentIndex)
+			affectedComponent := bom.GetComponentByIndex(cdc.bom, affectedComponentIndex)
 			// Create a new SCA vulnerability if needed, add the affected component if needed and add the vulnerability to the BOM
 			cycloneVulnerability := cdc.getOrCreateScaIssue(results.GetIssueIdentifier(cves, vulnerability.IssueId, ""), vulnerability.Summary, severity, applicabilityStatus)
 			if hasImpactedAffects(*cycloneVulnerability, *affectedComponent) {
@@ -208,7 +208,7 @@ func (cdc *CmdResultsCycloneDxConverter) ParseLicenses(target results.ScanTarget
 		func(license services.License, impactedPackagesId string, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) (e error) {
 			// Create or get the affected component
 			affectedComponentIndex := cdc.getOrCreateScaComponent(impactedPackagesId)
-			affectedComponent := cdc.getExistingComponent(affectedComponentIndex)
+			affectedComponent := bom.GetComponentByIndex(cdc.bom, affectedComponentIndex)
 			// Search for the license in the effected component
 			found := false
 			if affectedComponent.Licenses != nil {
@@ -263,7 +263,7 @@ func (cdc *CmdResultsCycloneDxConverter) appendComponents(components *[]cycloned
 		cdc.bom.Components = &[]cyclonedx.Component{}
 	}
 	for _, component := range *components {
-		if cdc.getExistingComponentIndex(component.BOMRef) >= 0 {
+		if bom.GetComponentIndex(cdc.bom, component.BOMRef) >= 0 {
 			// The component is already in the BOM
 			continue
 		}
@@ -291,15 +291,7 @@ func (cdc *CmdResultsCycloneDxConverter) appendDependencies(dependencies *[]cycl
 }
 
 func (cdc *CmdResultsCycloneDxConverter) getExistingDependencyEntry(ref string) *cyclonedx.Dependency {
-	if cdc.bom == nil || cdc.bom.Dependencies == nil {
-		return nil
-	}
-	for _, dependency := range *cdc.bom.Dependencies {
-		if dependency.Ref == ref {
-			return &dependency
-		}
-	}
-	return nil
+	return bom.GetDependencyEntry(cdc.bom, ref)
 }
 
 func (cdc *CmdResultsCycloneDxConverter) ParseSecrets(target results.ScanTarget, violations bool, secrets []results.ScanResult[[]*sarif.Run]) (err error) {
@@ -313,7 +305,7 @@ func (cdc *CmdResultsCycloneDxConverter) ParseSecrets(target results.ScanTarget,
 		// Create a new JAS vulnerability, add it to the BOM and return it
 		jasIssue := cdc.getOrCreateJasIssue(sarifutils.GetResultRuleId(result), sarifutils.GetRuleShortDescriptionText(rule), severity)
 		// Add the location to the vulnerability
-		addJasIssueAffects(jasIssue, *cdc.getExistingComponent(affectedComponentIndex), cyclonedx.Property{
+		addJasIssueAffects(jasIssue, *bom.GetComponentByIndex(cdc.bom, affectedComponentIndex), cyclonedx.Property{
 			Name:  fmt.Sprintf(jasIssueLocationPropertyTemplate, "secret"),
 			Value: fmt.Sprintf("%s#L%d-L%d", sarifutils.GetLocationFileName(location), sarifutils.GetLocationStartLine(location), sarifutils.GetLocationEndLine(location)),
 		})
@@ -344,7 +336,7 @@ func (cdc *CmdResultsCycloneDxConverter) ParseIacs(target results.ScanTarget, vi
 		// Create a new JAS vulnerability, add it to the BOM and return it
 		jasIssue := cdc.getOrCreateJasIssue(sarifutils.GetResultRuleId(result), sarifutils.GetRuleShortDescriptionText(rule), severity)
 		// Add the location to the vulnerability
-		addJasIssueAffects(jasIssue, *cdc.getExistingComponent(affectedComponentIndex), cyclonedx.Property{
+		addJasIssueAffects(jasIssue, *bom.GetComponentByIndex(cdc.bom, affectedComponentIndex), cyclonedx.Property{
 			Name:  fmt.Sprintf(jasIssueLocationPropertyTemplate, "iac"),
 			Value: fmt.Sprintf("%s#L%d-L%d", sarifutils.GetLocationFileName(location), sarifutils.GetLocationStartLine(location), sarifutils.GetLocationEndLine(location)),
 		})
@@ -363,7 +355,7 @@ func (cdc *CmdResultsCycloneDxConverter) ParseSast(target results.ScanTarget, vi
 		// Create a new JAS vulnerability, add it to the BOM and return it
 		jasIssue := cdc.getOrCreateJasIssue(sarifutils.GetResultRuleId(result), sarifutils.GetRuleShortDescriptionText(rule), severity)
 		// Add the location to the vulnerability
-		addJasIssueAffects(jasIssue, *cdc.getExistingComponent(affectedComponentIndex), cyclonedx.Property{
+		addJasIssueAffects(jasIssue, *bom.GetComponentByIndex(cdc.bom, affectedComponentIndex), cyclonedx.Property{
 			Name:  fmt.Sprintf(jasIssueLocationPropertyTemplate, "sast"),
 			Value: fmt.Sprintf("%s#L%d-L%d", sarifutils.GetLocationFileName(location), sarifutils.GetLocationStartLine(location), sarifutils.GetLocationEndLine(location)),
 		})
@@ -407,7 +399,7 @@ func (cdc *CmdResultsCycloneDxConverter) searchForService(serviceName string) *c
 func (cdc *CmdResultsCycloneDxConverter) getOrCreateScaComponent(impactedPackageId string) (componentIndex int) {
 	ref := bom.GetScaComponentRef(impactedPackageId)
 	// Check if the component already exists in the BOM
-	if componentIndex = cdc.getExistingComponentIndex(ref); componentIndex >= 0 {
+	if componentIndex = bom.GetComponentIndex(cdc.bom, ref); componentIndex >= 0 {
 		return
 	}
 	// Create a new component, add it to the BOM and return it
@@ -421,7 +413,7 @@ func (cdc *CmdResultsCycloneDxConverter) getOrCreateScaComponent(impactedPackage
 func (cdc *CmdResultsCycloneDxConverter) getOrCreateJasComponent(location *sarif.Location) (componentIndex int) {
 	ref := bom.GetFileRef(sarifutils.GetLocationFileName(location))
 	// Check if the component already exists in the BOM
-	if componentIndex = cdc.getExistingComponentIndex(ref); componentIndex >= 0 {
+	if componentIndex = bom.GetComponentIndex(cdc.bom, ref); componentIndex >= 0 {
 		return
 	}
 	// Create a new component, add it to the BOM and return it
