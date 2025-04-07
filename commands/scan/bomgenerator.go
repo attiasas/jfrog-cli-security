@@ -14,7 +14,7 @@ import (
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 
-	"github.com/jfrog/jfrog-cli-security/sca/runner"
+	"github.com/jfrog/jfrog-cli-security/sca/bom"
 	"github.com/jfrog/jfrog-cli-security/utils/formats/cdx"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 )
@@ -26,7 +26,7 @@ type JfrogBinaryBomGenerator struct {
 	BypassArchiveLimits bool
 }
 
-func (jbg *JfrogBinaryBomGenerator) Parallel(threadId int) runner.SbomGenerator {
+func (jbg *JfrogBinaryBomGenerator) Parallel(threadId int) bom.SbomGenerator {
 	return &JfrogBinaryBomGenerator{
 		threadId:            threadId,
 		IndexerPath:         jbg.IndexerPath,

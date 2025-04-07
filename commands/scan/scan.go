@@ -18,6 +18,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/jas/runner"
 	"github.com/jfrog/jfrog-cli-security/jas/secrets"
 	scaRunner "github.com/jfrog/jfrog-cli-security/sca/runner"
+	"github.com/jfrog/jfrog-cli-security/sca/bom"
 	"github.com/jfrog/jfrog-cli-security/utils/formats/cdx"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/results/output"
@@ -80,7 +81,7 @@ type ScanCommand struct {
 	startTime             time.Time
 	// Dynamic logic params
 	scanStrategy scaRunner.SbomScanStrategy
-	bomGenerator scaRunner.SbomGenerator
+	bomGenerator bom.SbomGenerator
 }
 
 func (scanCmd *ScanCommand) SetMinSeverityFilter(minSeverityFilter severityutils.Severity) *ScanCommand {

@@ -3,6 +3,7 @@ package audit
 import (
 	"time"
 
+	"github.com/jfrog/jfrog-cli-security/sca/bom"
 	scaRunner "github.com/jfrog/jfrog-cli-security/sca/runner"
 	xrayutils "github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
@@ -30,7 +31,7 @@ type AuditParams struct {
 	startTime                   time.Time
 	// Dynamic logic params
 	scanStrategy scaRunner.SbomScanStrategy
-	bomGenerator scaRunner.SbomGenerator
+	bomGenerator bom.SbomGenerator
 }
 
 func NewAuditParams() *AuditParams {
@@ -46,7 +47,7 @@ func (params *AuditParams) ScanStrategy() scaRunner.SbomScanStrategy {
 	return params.scanStrategy
 }
 
-func (params *AuditParams) BomGenerator() scaRunner.SbomGenerator {
+func (params *AuditParams) BomGenerator() bom.SbomGenerator {
 	return params.bomGenerator
 }
 

@@ -29,7 +29,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/commands/audit/sca/swift"
 	"github.com/jfrog/jfrog-cli-security/commands/audit/sca/yarn"
 
-	"github.com/jfrog/jfrog-cli-security/sca/runner"
+	"github.com/jfrog/jfrog-cli-security/sca/bom"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/artifactory"
 	"github.com/jfrog/jfrog-cli-security/utils/formats/cdx"
@@ -43,7 +43,7 @@ type JfrogSourceCodeBomGenerator struct {
 	params *AuditParams
 }
 
-func (jbg *JfrogSourceCodeBomGenerator) Parallel(threadId int) runner.SbomGenerator {
+func (jbg *JfrogSourceCodeBomGenerator) Parallel(threadId int) bom.SbomGenerator {
 	return jbg
 }
 
