@@ -53,7 +53,9 @@ func (cdc *CmdResultsCycloneDxConverter) Reset(cmdType utils.CommandType, multiS
 	cdc.xrayVersion = xrayVersion
 	// Reset the BOM
 	cdc.bom = cyclonedx.NewBOM()
-	cdc.bom.SerialNumber = fmt.Sprintf("urn:uuid:%s", multiScanId)
+	if multiScanId != "" {
+		cdc.bom.SerialNumber = bom.GetIdRef(multiScanId)
+	}
 	cdc.bom.Metadata = &cyclonedx.Metadata{
 		Timestamp: time.Now().Format(time.RFC3339),
 		Tools:     &cyclonedx.ToolsChoice{},
