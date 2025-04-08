@@ -14,6 +14,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/jas/applicability"
 	"github.com/jfrog/jfrog-cli-security/jas/runner"
 	"github.com/jfrog/jfrog-cli-security/jas/secrets"
+	jfrogScanGraph "github.com/jfrog/jfrog-cli-security/sca/runner/scangraph"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/results/output"
@@ -375,16 +376,43 @@ func RunScaScans(auditParallelRunner *utils.SecurityParallelRunner, auditParams 
 	if err != nil {
 		return fmt.Errorf("failed to get server details: %s", err.Error())
 	}
-	return scaRunner.RunScaScans(scaRunner.ScaScanParams{
-		Runner:              auditParallelRunner,
-		ScanResults:         scanResults,
-		Strategy:            auditParams.ScanStrategy(),
-		ServerDetails:       serverDetails,
-		ScansToPerform:      auditParams.ScansToPerform(),
-		ConfigProfile:       auditParams.configProfile,
-		AllowPartialResults: auditParams.AllowPartialResults(),
-		ResultsOutputDir:    auditParams.scanResultsOutputDir,
-	})
+	// Scan targets
+	for _, targetResult := range scanResults.Targets {
+		strategy := auditParams.ScanStrategy()
+		if jfrogStrategy, ok := strategy.(*jfrogScanGraph.JfrogScanGraphStrategy); ok {
+			// Prepare the specific scan strategy
+			strategy = jfrogStrategy.WithParams(createXrayScanGraphParams(serverDetails, targetResult, auditParams))
+		}
+		// Scan
+		generalError = errors.Join(generalError, scaRunner.RunScaScan(strategy, scaRunner.DependencyScanParams{
+			Runner: auditParallelRunner,
+			ScaScanParams: scaRunner.ScaScanParams{
+				ScanResults:         targetResult,
+				ServerDetails:       serverDetails,
+				ScansToPerform:      auditParams.ScansToPerform(),
+				ConfigProfile:       auditParams.configProfile,
+				AllowPartialResults: auditParams.AllowPartialResults(),
+				ResultsOutputDir:    auditParams.scanResultsOutputDir,
+			},
+		}))
+	}
+	return
+}
+
+func createXrayScanGraphParams(serverDetails *config.ServerDetails, targetResult *results.TargetResults, auditParams *AuditParams) (scanGraphParams *scangraph.ScanGraphParams) {
+	// Create the scan graph parameters.
+	xrayScanGraphParams := auditParams.createXrayGraphScanParams()
+	xrayScanGraphParams.MultiScanId = auditParams.GetMultiScanId()
+	xrayScanGraphParams.XrayVersion = auditParams.GetXrayVersion()
+	xrayScanGraphParams.XscVersion = auditParams.GetXscVersion()
+	xrayScanGraphParams.Technology = targetResult.Technology.String()
+
+	return scangraph.NewScanGraphParams().
+		SetServerDetails(serverDetails).
+		SetXrayGraphScanParams(xrayScanGraphParams).
+		SetTechnology(targetResult.Technology).
+		SetFixableOnly(auditParams.fixableOnly).
+		SetSeverityLevel(auditParams.minSeverityFilter.String())
 }
 
 func RunJasScans(auditParallelRunner *utils.SecurityParallelRunner, auditParams *AuditParams, scanResults *results.SecurityCommandResults) (jasScanner *jas.JasScanner, generalError error) {

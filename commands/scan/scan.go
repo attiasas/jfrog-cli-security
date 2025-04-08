@@ -17,13 +17,13 @@ import (
 	"github.com/jfrog/jfrog-cli-security/jas/applicability"
 	"github.com/jfrog/jfrog-cli-security/jas/runner"
 	"github.com/jfrog/jfrog-cli-security/jas/secrets"
-	scaRunner "github.com/jfrog/jfrog-cli-security/sca/runner"
 	"github.com/jfrog/jfrog-cli-security/sca/bom"
+	scaRunner "github.com/jfrog/jfrog-cli-security/sca/runner"
+	scaScanGraph "github.com/jfrog/jfrog-cli-security/sca/runner/scangraph"
 	"github.com/jfrog/jfrog-cli-security/utils/formats/cdx"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/results/output"
 	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
-	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/jfrog/jfrog-cli-security/utils/xray"
 	"github.com/jfrog/jfrog-cli-security/utils/xray/scangraph"
 	"github.com/jfrog/jfrog-cli-security/utils/xsc"
@@ -309,7 +309,7 @@ func (scanCmd *ScanCommand) RunScan(cmdType utils.CommandType) (cmdResults *resu
 		})
 	}
 
-	// scanCmd.scanStrategy =
+	scanCmd.scanStrategy = &scaScanGraph.JfrogScanGraphStrategy{}
 	// Initialize the Xray Indexer
 	if indexerPath, indexerTempDir, cleanUp, err := initIndexer(xrayManager, cmdResults.XrayVersion); err != nil {
 		return cmdResults.AddGeneralError(err, false)
@@ -445,105 +445,95 @@ func (scanCmd *ScanCommand) createIndexerHandlerFunc(file *spec.File, cmdResults
 				return targetResults.AddTargetError(fmt.Errorf("failed to generate SBOM: %s", err.Error()), false)
 			}
 			targetResults.SetSbom(sbom)
-			// Scan the file
-
-			// log.Info(clientutils.GetLogMsgPrefix(threadId, false), "Indexing file:", targetResults.Target)
-			// Index the file and get the dependencies graph.
-			// TODO: create indexer strategy
-			// graph, err := scanCmd.indexFile(targetResults.Target)
-			// if err != nil {
-			// 	return targetResults.AddTargetError(err, false)
-			// }
-			// // In case of empty graph returned by the indexer,
-			// // for instance due to unsupported file format, continue without sending a
-			// // graph request to Xray.
-			// if graph.Id == "" {
-			// 	return
-			// }
 			// Add a new task to the second producer/consumer
-			// which will send the indexed binary to Xray and then will store the received result.
+			// which will scan the indexed file. (SCA + JAS)
 			taskFunc := func(scanThreadId int) (err error) {
-				scanLogPrefix := clientutils.GetLogMsgPrefix(scanThreadId, false)
-				params := &services.XrayGraphScanParams{
-					BinaryGraph:            cdx.BomToFullCompTree(sbom),
-					RepoPath:               getXrayRepoPathFromTarget(file.Target),
-					Watches:                scanCmd.resultsContext.Watches,
-					IncludeLicenses:        scanCmd.resultsContext.IncludeLicenses,
-					IncludeVulnerabilities: scanCmd.resultsContext.IncludeVulnerabilities,
-					ProjectKey:             scanCmd.resultsContext.ProjectKey,
-					ScanType:               services.Binary,
-					MultiScanId:            cmdResults.MultiScanId,
-					XscVersion:             cmdResults.XscVersion,
-					XrayVersion:            cmdResults.XrayVersion,
-				}
 				if scanCmd.progress != nil {
 					scanCmd.progress.SetHeadlineMsg("Scanning 🔍")
 				}
-				scanGraphParams := scangraph.NewScanGraphParams().
-					SetServerDetails(scanCmd.serverDetails).
-					SetXrayGraphScanParams(params).
-					SetFixableOnly(scanCmd.fixableOnly).
-					SetSeverityLevel(scanCmd.minSeverityFilter.String())
-				xrayManager, err := xray.CreateXrayServiceManager(scanGraphParams.ServerDetails())
-				if err != nil {
-					return targetResults.AddTargetError(fmt.Errorf("%s failed to create Xray service manager: %s", scanLogPrefix, err.Error()), false)
+				// SCA scan
+				if err = scanCmd.RunBinaryScaScan(file.Target, cmdResults, targetResults, scanThreadId); err != nil {
+					return
 				}
-				graphScanResults, err := scangraph.RunScanGraphAndGetResults(scanGraphParams, xrayManager)
-				if err != nil {
-					return targetResults.AddTargetError(fmt.Errorf("%s sca scanning '%s' failed with error: %s", scanLogPrefix, sbom.SerialNumber, err.Error()), false)
-				} else {
-					targetResults.NewScaScanResults(scaRunner.GetScaScansStatusCode(err, *graphScanResults), *graphScanResults)
-					// sbom := cyclonedx.NewBOM()
-					// sbom.Components, sbom.Dependencies = bom.CompTreeToSbom(graph)
-					// targetResults.SetSbom(sbom)
-					targetResults.Technology = techutils.Technology(graphScanResults.ScannedPackageType)
-				}
+				// Run Jas scans
 				if !cmdResults.EntitledForJas {
 					return
 				}
-				module, err := getJasModule(targetResults)
-				if err != nil {
-					return targetResults.AddTargetError(fmt.Errorf("%s jas scanning failed with error: %s", scanLogPrefix, err.Error()), false)
-				}
-				// Run Jas scans
-				scanner, err := jas.CreateJasScanner(scanCmd.serverDetails,
-					cmdResults.SecretValidation,
-					scanCmd.minSeverityFilter,
-					jas.GetAnalyzerManagerXscEnvVars(
-						cmdResults.MultiScanId,
-						// Passing but empty since not supported for binary scans
-						scanCmd.resultsContext.GitRepoHttpsCloneUrl,
-						scanCmd.resultsContext.ProjectKey,
-						scanCmd.resultsContext.Watches,
-						targetResults.GetTechnologies()...,
-					),
-				)
-				if err != nil {
-					return targetResults.AddTargetError(fmt.Errorf("failed to create jas scanner: %s", err.Error()), false)
-				} else if scanner == nil {
-					log.Debug("Jas scanner was not created, skipping advance security scans...")
-					return
-				}
-				jasParams := runner.JasRunnerParams{
-					Runner:             jasFileProducerConsumer,
-					ServerDetails:      scanCmd.serverDetails,
-					Scanner:            scanner,
-					Module:             module,
-					ScansToPerform:     utils.GetAllSupportedScans(),
-					SecretsScanType:    secrets.SecretsScannerDockerScanType,
-					DirectDependencies: directDepsListFromVulnerabilities(*graphScanResults),
-					ApplicableScanType: applicability.ApplicabilityDockerScanScanType,
-					ScanResults:        targetResults,
-				}
-				if generalError := runner.AddJasScannersTasks(jasParams); generalError != nil {
-					return targetResults.AddTargetError(fmt.Errorf("%s failed to add Jas scan tasks: %s", scanLogPrefix, generalError.Error()), false)
-				}
-				return
+				return scanCmd.RunBinaryJasScans(cmdResults.MultiScanId, cmdResults.SecretValidation, targetResults, jasFileProducerConsumer, scanThreadId)
 			}
 			_, _ = indexedFileProducer.AddTask(taskFunc)
 			return
 		}
 	}
+}
+
+func (scanCmd *ScanCommand) RunBinaryScaScan(fileTarget string, cmdResults *results.SecurityCommandResults, targetResults *results.TargetResults, scanThreadId int) (err error) {
+	scaScanParams := scaRunner.ComponentScanParams{ScaScanParams: scaRunner.ScaScanParams{
+		ServerDetails: scanCmd.serverDetails,
+		ScanResults:   targetResults,
+	}}
+	strategy := scanCmd.scanStrategy
+	if scanGraphStrategy, ok := strategy.(*scaScanGraph.JfrogScanGraphStrategy); ok {
+		strategy = scanGraphStrategy.WithParams(scanGraphStrategy.
+			SetServerDetails(scanCmd.serverDetails).
+			SetFixableOnly(scanCmd.fixableOnly).
+			SetSeverityLevel(scanCmd.minSeverityFilter.String()).
+			SetXrayGraphScanParams(&services.XrayGraphScanParams{
+				RepoPath:               getXrayRepoPathFromTarget(fileTarget),
+				Watches:                scanCmd.resultsContext.Watches,
+				IncludeLicenses:        scanCmd.resultsContext.IncludeLicenses,
+				IncludeVulnerabilities: scanCmd.resultsContext.IncludeVulnerabilities,
+				ProjectKey:             scanCmd.resultsContext.ProjectKey,
+				MultiScanId:            cmdResults.MultiScanId,
+				XscVersion:             cmdResults.XscVersion,
+				XrayVersion:            cmdResults.XrayVersion,
+				ScanType: 			    services.Binary,
+			},
+			))
+	}
+	return scaRunner.RunScaBinaryScans(strategy, scaScanParams, scanThreadId)
+}
+
+func (scanCmd *ScanCommand) RunBinaryJasScans(msi string, secretValidation bool, targetResults *results.TargetResults, jasFileProducerConsumer *utils.SecurityParallelRunner, scanThreadId int) (err error) {
+	scanLogPrefix := clientutils.GetLogMsgPrefix(scanThreadId, false)
+	module, err := getJasModule(targetResults)
+	if err != nil {
+		return targetResults.AddTargetError(fmt.Errorf("%s jas scanning failed with error: %s", scanLogPrefix, err.Error()), false)
+	}
+	// Run Jas scans
+	scanner, err := jas.CreateJasScanner(scanCmd.serverDetails,
+		secretValidation,
+		scanCmd.minSeverityFilter,
+		jas.GetAnalyzerManagerXscEnvVars(
+			msi,
+			// Passing but empty since not supported for binary scans
+			scanCmd.resultsContext.GitRepoHttpsCloneUrl,
+			scanCmd.resultsContext.ProjectKey,
+			scanCmd.resultsContext.Watches,
+			targetResults.GetTechnologies()...,
+		),
+	)
+	if err != nil {
+		return targetResults.AddTargetError(fmt.Errorf("failed to create jas scanner: %s", err.Error()), false)
+	} else if scanner == nil {
+		log.Debug("Jas scanner was not created, skipping advance security scans...")
+		return
+	}
+	jasParams := runner.JasRunnerParams{
+		Runner:             jasFileProducerConsumer,
+		ServerDetails:      scanCmd.serverDetails,
+		Scanner:            scanner,
+		Module:             module,
+		ScansToPerform:     utils.GetAllSupportedScans(),
+		SecretsScanType:    secrets.SecretsScannerDockerScanType,
+		DirectDependencies: cdx.BomToDirectCompIds(targetResults.Sbom),
+		ApplicableScanType: applicability.ApplicabilityDockerScanScanType,
+		ScanResults:        targetResults,
+	}
+	if generalError := runner.AddJasScannersTasks(jasParams); generalError != nil {
+		return targetResults.AddTargetError(fmt.Errorf("%s failed to add Jas scan tasks: %s", scanLogPrefix, generalError.Error()), false)
+	}
+	return
 }
 
 func getJasModule(targetResults *results.TargetResults) (jfrogappsconfig.Module, error) {

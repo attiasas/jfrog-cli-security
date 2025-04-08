@@ -15,6 +15,10 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 )
 
+const (
+	binaryPathPropertyName = "jfrog:location:path"
+)
+
 // Parse a given Package URL (purl) and return the component name, version, and package type.
 // Examples:
 //  1. purl: "pkg:golang/github.com/gophish/gophish@v0.1.2"
@@ -124,6 +128,41 @@ func CreateScaComponent(xrayImpactedPackageId string, properties ...cyclonedx.Pr
 	return
 }
 
+func CreateScaComponentFromNode(node *xrayUtils.BinaryGraphNode) (component cyclonedx.Component) {
+	properties := []cyclonedx.Property{}
+	// Add the path property if it exists
+	if node.Path != "" {
+		properties = append(properties, cyclonedx.Property{Name: binaryPathPropertyName, Value: node.Path})	
+	}
+	// Create the component
+	component = CreateScaComponent(node.Id, properties...)
+	licenses := cyclonedx.Licenses{}
+	for _, license := range node.Licenses {
+		if license == "" {
+			continue
+		}
+		licenses = append(licenses, cyclonedx.LicenseChoice{License: &cyclonedx.License{ID: license}})
+	}
+	if len(licenses) > 0 {
+		component.Licenses = &licenses
+	}
+	if node.Sha1 == "" && node.Sha256 == "" {
+		return
+	}
+	// Add hashes to the component if they exist
+	hashes := []cyclonedx.Hash{}
+	if node.Sha1 != "" {
+		hashes = append(hashes, cyclonedx.Hash{Algorithm: cyclonedx.HashAlgoSHA1, Value: node.Sha1})
+	}
+	if node.Sha256 != "" {
+		hashes = append(hashes, cyclonedx.Hash{Algorithm: cyclonedx.HashAlgoSHA256, Value: node.Sha256})
+	}
+	if len(hashes) > 0 {
+		component.Hashes = &hashes
+	}
+	return 
+}
+
 func CreateFileOrDirComponent(location string) (component cyclonedx.Component) {
 	component = cyclonedx.Component{
 		BOMRef: GetFileRef(location),
@@ -159,6 +198,17 @@ func SearchDependencyEntry(dependencies *[]cyclonedx.Dependency, ref string) *cy
 		}
 	}
 	return nil
+}
+
+func GetMainComponentName(sbom *cyclonedx.BOM) (mainComponentName string) {
+	mainComponentName = "unknown"
+	if sbom == nil || sbom.Metadata == nil || sbom.Metadata.Component == nil {
+		return
+	}
+	if sbom.Metadata.Component.Name != "" {
+		mainComponentName = sbom.Metadata.Component.Name
+	}
+	return
 }
 
 // Conversion functions
@@ -229,10 +279,11 @@ func getDataFromBinaryNode(node *xrayUtils.BinaryGraphNode, parsed *datastructur
 	}
 	parsed.Add(node.Id)
 	// Create a new component and add it to the sbom
-	*components = append(*components, CreateScaComponent(node.Id))
+	component := CreateScaComponentFromNode(node)
+	*components = append(*components, component)
 	if len(node.Nodes) > 0 {
 		// Create a matching dependency entry describing the direct dependencies
-		*dependencies = append(*dependencies, cyclonedx.Dependency{Ref: GetScaComponentRef(node.Id), Dependencies: getNodeDirectBinaryComponents(node)})
+		*dependencies = append(*dependencies, cyclonedx.Dependency{Ref: component.BOMRef, Dependencies: getNodeDirectBinaryComponents(node)})
 	}
 	// Go through the dependencies and add them to the sbom
 	for _, dependencyNode := range node.Nodes {
@@ -369,7 +420,7 @@ func GetDependencyEntry(sbom *cyclonedx.BOM, ref string) *cyclonedx.Dependency {
 func BomToFullCompTree(sbom *cyclonedx.BOM) (fullDependencyTree *xrayUtils.BinaryGraphNode) {
 	fullDependencyTrees := []*xrayUtils.BinaryGraphNode{}
 	for _, rootEntry := range ReduceToRoots(sbom) {
-		currentTree := &xrayUtils.BinaryGraphNode{Id: rootEntry.Ref}
+		currentTree := toBinaryNode(sbom, rootEntry.Ref)
 		// Populate application tree
 		populateCompsNodeDataFromBom(currentTree, sbom)
 		// Add the tree to the output list
@@ -390,13 +441,54 @@ func BomToFullCompTree(sbom *cyclonedx.BOM) (fullDependencyTree *xrayUtils.Binar
 }
 
 func populateCompsNodeDataFromBom(node *xrayUtils.BinaryGraphNode, sbom *cyclonedx.BOM) {
-	for _, depRef := range getDirectDependencies(sbom, node.Id) {
-		depNode := &xrayUtils.BinaryGraphNode{Id: depRef}
+	for _, depRef := range getDirectDependencies(sbom, XrayComponentIdToPurl(node.Id)) {
+		depNode := toBinaryNode(sbom, depRef)
 		// Add the dependency to the current node
 		node.Nodes = append(node.Nodes, depNode)
 		// Recursively populate the node data
 		populateCompsNodeDataFromBom(depNode, sbom)
 	}
+}
+
+func toBinaryNode(sbom *cyclonedx.BOM, ref string) *xrayUtils.BinaryGraphNode {
+	component := GetComponent(sbom, ref)
+	if component == nil {
+		return nil
+	}
+	if component.Type != cyclonedx.ComponentTypeLibrary {
+		// We are only interested in libraries for the dependency tree
+		return nil
+	}
+	// Create a new BinaryGraphNode and set its ID
+	node := &xrayUtils.BinaryGraphNode{Id: PurlToXrayComponentId(component.PackageURL)}
+	if component.Licenses != nil {
+		// Add the licenses to the node
+		for _, license := range *component.Licenses {
+			if license.License != nil && license.License.ID != "" {
+				node.Licenses = append(node.Licenses, license.License.ID)
+			}
+		}
+	}
+	if component.Hashes != nil {
+		// Add the hashes to the node
+		for _, hash := range *component.Hashes {
+			switch hash.Algorithm {
+			case cyclonedx.HashAlgoSHA1:
+				node.Sha1 = hash.Value
+			case cyclonedx.HashAlgoSHA256:
+				node.Sha256 = hash.Value
+			}
+		}
+	}
+	if component.Properties != nil {
+		// Add the properties to the node
+		for _, property := range *component.Properties {
+			if property.Name == binaryPathPropertyName {
+				node.Path = property.Value
+			}
+		}
+	}
+	return node
 }
 
 func getDirectDependencies(sbom *cyclonedx.BOM, componentRef string) (dependencies []string) {
@@ -416,14 +508,6 @@ func BomToFlatTree(sbom *cyclonedx.BOM) (flatTree *xrayUtils.GraphNode) {
 	flatTree = &xrayUtils.GraphNode{Id: "root"}
 	for _, component := range getUniqueXrayCompIds(sbom) {
 		flatTree.Nodes = append(flatTree.Nodes, &xrayUtils.GraphNode{Id: component})
-	}
-	return
-}
-
-func BomToFlatCompTree(sbom *cyclonedx.BOM) (flatTree *xrayUtils.BinaryGraphNode) {
-	flatTree = &xrayUtils.BinaryGraphNode{Id: "root"}
-	for _, component := range getUniqueXrayCompIds(sbom) {
-		flatTree.Nodes = append(flatTree.Nodes, &xrayUtils.BinaryGraphNode{Id: component})
 	}
 	return
 }
@@ -455,7 +539,7 @@ func BomToDirectCompIds(sbom *cyclonedx.BOM) (directDepList *[]string) {
 			continue
 		}
 		for _, directDependency := range *root.Dependencies {
-			*directDepList = append(*directDepList, directDependency)
+			*directDepList = append(*directDepList, PurlToXrayComponentId(directDependency))
 		}
 	}
 	return
