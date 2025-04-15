@@ -132,7 +132,7 @@ func CreateScaComponentFromNode(node *xrayUtils.BinaryGraphNode) (component cycl
 	properties := []cyclonedx.Property{}
 	// Add the path property if it exists
 	if node.Path != "" {
-		properties = append(properties, cyclonedx.Property{Name: binaryPathPropertyName, Value: node.Path})	
+		properties = append(properties, cyclonedx.Property{Name: binaryPathPropertyName, Value: node.Path})
 	}
 	// Create the component
 	component = CreateScaComponent(node.Id, properties...)
@@ -160,7 +160,7 @@ func CreateScaComponentFromNode(node *xrayUtils.BinaryGraphNode) (component cycl
 	if len(hashes) > 0 {
 		component.Hashes = &hashes
 	}
-	return 
+	return
 }
 
 func CreateFileOrDirComponent(location string) (component cyclonedx.Component) {
@@ -520,6 +520,9 @@ func BomToFlatCompIds(sbom *cyclonedx.BOM) (flatDepList *[]string) {
 }
 
 func getUniqueXrayCompIds(sbom *cyclonedx.BOM) (uniqueCompIds []string) {
+	if sbom == nil || sbom.Components == nil {
+		return
+	}
 	components := datastructures.MakeSet[string]()
 	// Collect all unique components
 	for _, component := range *sbom.Components {

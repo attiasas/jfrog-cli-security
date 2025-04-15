@@ -109,7 +109,7 @@ func shouldRunScan(params ScaScanParams, threadId int) (bool, error) {
 			return false, nil
 		}
 	}
-	if params.ScanResults.Sbom == nil || params.ScanResults.Sbom.Dependencies == nil || len(*params.ScanResults.Sbom.Dependencies) == 0 {
+	if !params.ScanResults.HasSbomComponents() {
 		log.Debug(fmt.Sprintf(logPrefix+"Skipping SCA scan for %s as no dependencies were found in the target", params.ScanResults.Target))
 		return false, nil
 	}

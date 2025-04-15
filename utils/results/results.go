@@ -350,6 +350,10 @@ func (sr *TargetResults) GetDependenciesForApplicabilityScan(flatTree bool) (sli
 	return
 }
 
+func (sr *TargetResults) HasSbomComponents() bool {
+	return len(*cdx.BomToFlatCompIds(sr.Sbom)) > 0
+}
+
 func (sr *TargetResults) GetScaScansXrayResults() (results []services.ScanResponse) {
 	if sr.ScaResults == nil {
 		return

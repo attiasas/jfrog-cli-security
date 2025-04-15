@@ -487,7 +487,7 @@ func (scanCmd *ScanCommand) RunBinaryScaScan(fileTarget string, cmdResults *resu
 				MultiScanId:            cmdResults.MultiScanId,
 				XscVersion:             cmdResults.XscVersion,
 				XrayVersion:            cmdResults.XrayVersion,
-				ScanType: 			    services.Binary,
+				ScanType:               services.Binary,
 			},
 			))
 	}
