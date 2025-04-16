@@ -6,6 +6,7 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/common/format"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	ioUtils "github.com/jfrog/jfrog-client-go/utils/io"
+	xscservices "github.com/jfrog/jfrog-client-go/xsc/services"
 )
 
 type AuditParams interface {
@@ -47,6 +48,7 @@ type AuditParams interface {
 	SkipAutoInstall() bool
 	AllowPartialResults() bool
 	GetXrayVersion() string
+	GetConfigProfile() *xscservices.ConfigProfile
 }
 
 type AuditBasicParams struct {
@@ -75,6 +77,7 @@ type AuditBasicParams struct {
 	allowPartialResults bool
 	xrayVersion         string
 	xscVersion          string
+	configProfile                    *xscservices.ConfigProfile
 }
 
 // func (abp *AuditBasicParams) DirectDependencies() *[]string {
@@ -316,4 +319,13 @@ func (abp *AuditBasicParams) SetXscVersion(xscVersion string) *AuditBasicParams 
 
 func (abp *AuditBasicParams) GetXscVersion() string {
 	return abp.xscVersion
+}
+
+func (abp *AuditBasicParams) SetConfigProfile(profile *xscservices.ConfigProfile) *AuditBasicParams {
+	abp.configProfile = profile
+	return abp
+}
+
+func (abp *AuditBasicParams) GetConfigProfile() *xscservices.ConfigProfile {
+	return abp.configProfile
 }

@@ -443,6 +443,8 @@ func RunJasScans(auditParallelRunner *utils.SecurityParallelRunner, auditParams 
 		),
 		auditParams.Exclusions()...,
 	)
+	jas.UpdateJasScannerWithExcludePatternsFromProfile(jasScanner, auditParams.AuditBasicParams.GetConfigProfile())
+
 	auditParallelRunner.ResultsMu.Unlock()
 	if err != nil {
 		generalError = fmt.Errorf("failed to create jas scanner: %s", err.Error())
@@ -482,7 +484,7 @@ func createJasScansTasks(auditParallelRunner *utils.SecurityParallelRunner, scan
 				ServerDetails:               serverDetails,
 				Scanner:                     scanner,
 				Module:                      *targetResult.AppsConfigModule,
-				ConfigProfile:               auditParams.configProfile,
+				ConfigProfile:               auditParams.AuditBasicParams.GetConfigProfile(),
 				ScansToPerform:              auditParams.ScansToPerform(),
 				SecretsScanType:             secrets.SecretsScannerType,
 				DirectDependencies:          targetResult.GetDependenciesForApplicabilityScan(auditParams.ShouldGetFlatTreeForApplicableScan(targetResult.Technology)),
