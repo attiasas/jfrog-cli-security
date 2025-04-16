@@ -77,7 +77,7 @@ type AuditBasicParams struct {
 	allowPartialResults bool
 	xrayVersion         string
 	xscVersion          string
-	configProfile                    *xscservices.ConfigProfile
+	configProfile       *xscservices.ConfigProfile
 }
 
 // func (abp *AuditBasicParams) DirectDependencies() *[]string {

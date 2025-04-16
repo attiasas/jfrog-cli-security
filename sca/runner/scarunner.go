@@ -104,7 +104,7 @@ func shouldRunScan(params ScaScanParams, threadId int) (bool, error) {
 			// Verify Modules are not nil and contain at least one modules
 			return false, fmt.Errorf("config profile %s has no modules. A config profile must contain at least one modules", params.ConfigProfile.ProfileName)
 		}
-		if !params.ConfigProfile.Modules[0].ScanConfig.EnableScaScan {
+		if !params.ConfigProfile.Modules[0].ScanConfig.ScaScannerConfig.EnableScaScan {
 			log.Debug(fmt.Sprintf(logPrefix+"Skipping SCA scan as requested by '%s' config profile...", params.ConfigProfile.ProfileName))
 			return false, nil
 		}

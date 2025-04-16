@@ -17,7 +17,6 @@ import (
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	xrayClientUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 
-	"github.com/jfrog/build-info-go/utils/pythonutils"
 	"github.com/jfrog/jfrog-cli-security/commands/audit/sca/cocoapods"
 	"github.com/jfrog/jfrog-cli-security/commands/audit/sca/conan"
 	_go "github.com/jfrog/jfrog-cli-security/commands/audit/sca/go"
@@ -163,14 +162,7 @@ func GetTechDependencyTree(params utils.AuditParams, artifactoryServerDetails *c
 		depTreeResult.FullDepTrees, uniqueDeps, err = _go.BuildDependencyTree(params)
 	case techutils.Pipenv, techutils.Pip, techutils.Poetry:
 		depTreeResult.FullDepTrees, uniqueDeps,
-			depTreeResult.DownloadUrls, err = python.BuildDependencyTree(&python.AuditPython{
-			Server:              artifactoryServerDetails,
-			Tool:                pythonutils.PythonTool(tech),
-			RemotePypiRepo:      params.DepsRepo(),
-			PipRequirementsFile: params.PipRequirementsFile(),
-			InstallCommandArgs:  params.InstallCommandArgs(),
-			IsCurationCmd:       params.IsCurationCmd(),
-		})
+			depTreeResult.DownloadUrls, err = python.BuildDependencyTree(params, tech)
 	case techutils.Nuget:
 		depTreeResult.FullDepTrees, uniqueDeps, err = nuget.BuildDependencyTree(params)
 	case techutils.Cocoapods:

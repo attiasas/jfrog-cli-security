@@ -390,7 +390,7 @@ func RunScaScans(auditParallelRunner *utils.SecurityParallelRunner, auditParams 
 				ScanResults:         targetResult,
 				ServerDetails:       serverDetails,
 				ScansToPerform:      auditParams.ScansToPerform(),
-				ConfigProfile:       auditParams.configProfile,
+				ConfigProfile:       auditParams.GetConfigProfile(),
 				AllowPartialResults: auditParams.AllowPartialResults(),
 				ResultsOutputDir:    auditParams.scanResultsOutputDir,
 			},
