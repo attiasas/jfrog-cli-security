@@ -307,7 +307,7 @@ func (cdc *CmdResultsCycloneDxConverter) ParseSecrets(target results.ScanTarget,
 		// Create or get the affected component
 		affectedComponentIndex := cdc.getOrCreateJasComponent(location)
 		// Create a new JAS vulnerability, add it to the BOM and return it
-		jasIssue := cdc.getOrCreateJasIssue(sarifutils.GetResultRuleId(result), sarifutils.GetRuleShortDescriptionText(rule), []string{}, severity)
+		jasIssue := cdc.getOrCreateJasIssue(sarifutils.GetResultRuleId(result), sarifutils.GetRuleShortDescriptionText(rule), sarifutils.GetRuleCWE(rule), severity)
 		// Add the location to the vulnerability
 		addJasIssueAffects(jasIssue, *cdx.GetComponentByIndex(cdc.bom, affectedComponentIndex), cyclonedx.Property{
 			Name:  fmt.Sprintf(jasIssueLocationPropertyTemplate, "secret"),
@@ -338,7 +338,7 @@ func (cdc *CmdResultsCycloneDxConverter) ParseIacs(target results.ScanTarget, vi
 		// Create or get the affected component
 		affectedComponentIndex := cdc.getOrCreateJasComponent(location)
 		// Create a new JAS vulnerability, add it to the BOM and return it
-		jasIssue := cdc.getOrCreateJasIssue(sarifutils.GetResultRuleId(result), sarifutils.GetRuleShortDescriptionText(rule), []string{}, severity)
+		jasIssue := cdc.getOrCreateJasIssue(sarifutils.GetResultRuleId(result), sarifutils.GetRuleShortDescriptionText(rule), sarifutils.GetRuleCWE(rule), severity)
 		// Add the location to the vulnerability
 		addJasIssueAffects(jasIssue, *cdx.GetComponentByIndex(cdc.bom, affectedComponentIndex), cyclonedx.Property{
 			Name:  fmt.Sprintf(jasIssueLocationPropertyTemplate, "iac"),
