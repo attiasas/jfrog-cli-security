@@ -27,7 +27,7 @@ import (
 const (
 	xrayToolName = "JFrog Xray Scanner"
 
-	jasIssueLocationPropertyTemplate = "jfrog:%s:location"
+	jasIssueLocationPropertyTemplate = "jfrog:%s:location:%s"
 	applicabilityStatusPropertyName  = "jfrog:contextual-analysis:status"
 )
 
@@ -309,8 +309,9 @@ func (cdc *CmdResultsCycloneDxConverter) ParseSecrets(target results.ScanTarget,
 		// Create a new JAS vulnerability, add it to the BOM and return it
 		jasIssue := cdc.getOrCreateJasIssue(sarifutils.GetResultRuleId(result), sarifutils.GetRuleShortDescriptionText(rule), sarifutils.GetRuleCWE(rule), severity)
 		// Add the location to the vulnerability
-		addJasIssueAffects(jasIssue, *cdx.GetComponentByIndex(cdc.bom, affectedComponentIndex), cyclonedx.Property{
-			Name:  fmt.Sprintf(jasIssueLocationPropertyTemplate, "secret"),
+		affectedComponent := cdx.GetComponentByIndex(cdc.bom, affectedComponentIndex)
+		addJasIssueAffects(jasIssue, *affectedComponent, cyclonedx.Property{
+			Name:  fmt.Sprintf(jasIssueLocationPropertyTemplate, "secret", affectedComponent.BOMRef),
 			Value: fmt.Sprintf("%s#L%d-L%d", sarifutils.GetLocationFileName(location), sarifutils.GetLocationStartLine(location), sarifutils.GetLocationEndLine(location)),
 		})
 		return
@@ -340,8 +341,9 @@ func (cdc *CmdResultsCycloneDxConverter) ParseIacs(target results.ScanTarget, vi
 		// Create a new JAS vulnerability, add it to the BOM and return it
 		jasIssue := cdc.getOrCreateJasIssue(sarifutils.GetResultRuleId(result), sarifutils.GetRuleShortDescriptionText(rule), sarifutils.GetRuleCWE(rule), severity)
 		// Add the location to the vulnerability
-		addJasIssueAffects(jasIssue, *cdx.GetComponentByIndex(cdc.bom, affectedComponentIndex), cyclonedx.Property{
-			Name:  fmt.Sprintf(jasIssueLocationPropertyTemplate, "iac"),
+		affectedComponent := cdx.GetComponentByIndex(cdc.bom, affectedComponentIndex)
+		addJasIssueAffects(jasIssue, *affectedComponent, cyclonedx.Property{
+			Name:  fmt.Sprintf(jasIssueLocationPropertyTemplate, "iac", affectedComponent.BOMRef),
 			Value: fmt.Sprintf("%s#L%d-L%d", sarifutils.GetLocationFileName(location), sarifutils.GetLocationStartLine(location), sarifutils.GetLocationEndLine(location)),
 		})
 		return
@@ -359,8 +361,9 @@ func (cdc *CmdResultsCycloneDxConverter) ParseSast(target results.ScanTarget, vi
 		// Create a new JAS vulnerability, add it to the BOM and return it
 		jasIssue := cdc.getOrCreateJasIssue(sarifutils.GetResultRuleId(result), sarifutils.GetRuleShortDescriptionText(rule), sarifutils.GetRuleCWE(rule), severity)
 		// Add the location to the vulnerability
-		addJasIssueAffects(jasIssue, *cdx.GetComponentByIndex(cdc.bom, affectedComponentIndex), cyclonedx.Property{
-			Name:  fmt.Sprintf(jasIssueLocationPropertyTemplate, "sast"),
+		affectedComponent := cdx.GetComponentByIndex(cdc.bom, affectedComponentIndex)
+		addJasIssueAffects(jasIssue, *affectedComponent, cyclonedx.Property{
+			Name:  fmt.Sprintf(jasIssueLocationPropertyTemplate, "sast", affectedComponent.BOMRef),
 			Value: fmt.Sprintf("%s#L%d-L%d", sarifutils.GetLocationFileName(location), sarifutils.GetLocationStartLine(location), sarifutils.GetLocationEndLine(location)),
 		})
 		return
