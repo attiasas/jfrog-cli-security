@@ -307,6 +307,7 @@ func (cdc *CmdResultsCycloneDxConverter) ParseSecrets(target results.ScanTarget,
 		// Create or get the affected component
 		affectedComponentIndex := cdc.getOrCreateJasComponent(location)
 		// Create a new JAS vulnerability, add it to the BOM and return it
+		// TODO: make sure with secrets team what is the CWE for secrets (212?) they should output
 		jasIssue := cdc.getOrCreateJasIssue(sarifutils.GetResultRuleId(result), sarifutils.GetRuleShortDescriptionText(rule), sarifutils.GetRuleCWE(rule), severity)
 		// Add the location to the vulnerability
 		affectedComponent := cdx.GetComponentByIndex(cdc.bom, affectedComponentIndex)
