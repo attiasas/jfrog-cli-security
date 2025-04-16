@@ -5,11 +5,8 @@ import (
 	"fmt"
 	"path/filepath"
 
-	// "sort"
 	"strconv"
 	"strings"
-
-	// "golang.org/x/exp/maps"
 
 	"github.com/CycloneDX/cyclonedx-go"
 	"github.com/jfrog/gofrog/datastructures"
@@ -24,7 +21,6 @@ import (
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/jfrog/jfrog-client-go/xray/services"
 
-	// xrayCmdUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 	"github.com/owenrumney/go-sarif/v2/sarif"
 	"golang.org/x/exp/slices"
 )
