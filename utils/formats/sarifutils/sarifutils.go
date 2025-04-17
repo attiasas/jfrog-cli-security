@@ -11,14 +11,24 @@ import (
 )
 
 const (
-	WatchSarifPropertyKey           = "watch"
-	PoliciesSarifPropertyKey        = "policies"
-	JasIssueIdSarifPropertyKey      = "issueId"
-	CWEPropertyKey                  = "CWE"
-	SarifImpactPathsRulePropertyKey = "impactPaths"
+	WatchSarifPropertyKey                   = "watch"
+	PoliciesSarifPropertyKey                = "policies"
+	JasIssueIdSarifPropertyKey              = "issueId"
+	CWEPropertyKey                          = "CWE"
+	SarifImpactPathsRulePropertyKey         = "impactPaths"
+	TokenValidationStatusSarifPropertyKey   = "tokenValidation"
+	TokenValidationMetadataSarifPropertyKey = "metadata"
 )
 
 // Specific JFrog Sarif Utils
+
+func GetResultPropertyTokenValidation(result *sarif.Result) string {
+	return GetResultProperty(TokenValidationStatusSarifPropertyKey, result)
+}
+
+func GetResultPropertyMetadata(result *sarif.Result) string {
+	return GetResultProperty(TokenValidationMetadataSarifPropertyKey, result)
+}
 
 func GetResultWatches(result *sarif.Result) (watches string) {
 	if watchesProperty, ok := result.Properties[WatchSarifPropertyKey]; ok {

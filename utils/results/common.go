@@ -599,14 +599,6 @@ func GetRuleUndeterminedReason(rule *sarif.ReportingDescriptor) string {
 	return sarifutils.GetRuleProperty("undetermined_reason", rule)
 }
 
-func GetResultPropertyTokenValidation(result *sarif.Result) string {
-	return sarifutils.GetResultProperty("tokenValidation", result)
-}
-
-func GetResultPropertyMetadata(result *sarif.Result) string {
-	return sarifutils.GetResultProperty("metadata", result)
-}
-
 func getApplicabilityStatusFromRule(rule *sarif.ReportingDescriptor) jasutils.ApplicabilityStatus {
 	if rule.Properties[jasutils.ApplicabilitySarifPropertyKey] != nil {
 		status, ok := rule.Properties[jasutils.ApplicabilitySarifPropertyKey].(string)
@@ -766,4 +758,13 @@ func ShouldUpdateStatus(currentStatus, newStatus *int) bool {
 		return true
 	}
 	return false
+}
+
+func GetSecretResultApplicability(result *sarif.Result) *formats.Applicability {
+	status := sarifutils.GetResultPropertyTokenValidation(result)
+	statusDescription := sarifutils.GetResultPropertyMetadata(result)
+	if status == "" && statusDescription == "" {
+		return nil
+	}
+	return &formats.Applicability{Status: status, ScannerDescription: statusDescription}
 }
