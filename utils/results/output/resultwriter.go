@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"time"
 
+	"github.com/google/uuid"
 	"github.com/jfrog/jfrog-cli-core/v2/common/format"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
@@ -435,11 +435,11 @@ func (rw *ResultsWriter) UploadCdxScanResults(serverDetails *config.ServerDetail
 		}()
 	}
 	// Save the scan results to a file and upload it to the repository
-	id := rw.commandResults.MultiScanId
-	if id == "" {
-		id = fmt.Sprintf("%d", time.Now().UnixMilli())
+	if rw.commandResults.MultiScanId == "" {
+		// Generate a new UUID for the scan results
+		rw.commandResults.MultiScanId = uuid.New().String()
 	}
-	cdxFilePath := filepath.Join(directory, fmt.Sprintf("%s_scan_%s.cdx.json", rw.commandResults.CmdType, id))
+	cdxFilePath := filepath.Join(directory, fmt.Sprintf("%s_scan_%s.cdx.json", rw.commandResults.CmdType, rw.commandResults.MultiScanId))
 	log.Debug(fmt.Sprintf("Saving scan results CycloneDX to %s", cdxFilePath))
 	if err = rw.SaveAsCycloneDxFile(cdxFilePath); err != nil {
 		return fmt.Errorf("failed to save CycloneDX file: %s", err.Error())
