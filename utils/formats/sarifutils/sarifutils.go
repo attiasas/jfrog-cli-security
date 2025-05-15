@@ -14,6 +14,7 @@ const (
 	WatchSarifPropertyKey                   = "watch"
 	PoliciesSarifPropertyKey                = "policies"
 	JasIssueIdSarifPropertyKey              = "issueId"
+	JasScannerIdSarifPropertyKey             = "scanner_id"
 	CWEPropertyKey                          = "CWE"
 	SarifImpactPathsRulePropertyKey         = "impactPaths"
 	TokenValidationStatusSarifPropertyKey   = "tokenValidation"
@@ -58,6 +59,20 @@ func GetResultIssueId(result *sarif.Result) (issueId string) {
 			return issueIdValue
 		}
 	}
+	return
+}
+
+func GetRuleScannerId(rule *sarif.ReportingDescriptor) (issueId string) {
+	if rule == nil || rule.Properties == nil {
+		// No scanner id property
+		return
+	}
+	if issueIdProperty, ok := rule.Properties[JasScannerIdSarifPropertyKey]; ok {
+		if issueIdValue, ok := issueIdProperty.(string); ok {
+			return issueIdValue
+		}
+	}
+	// No scanner id property
 	return
 }
 
