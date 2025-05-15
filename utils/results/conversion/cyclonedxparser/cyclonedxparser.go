@@ -123,7 +123,11 @@ func (cdc *CmdResultsCycloneDxConverter) ParseScaIssues(target results.ScanTarge
 			affectedComponentIndex := cdc.getOrCreateScaComponent(impactedPackagesId)
 			affectedComponent := cdx.GetComponentByIndex(cdc.bom, affectedComponentIndex)
 			// Create a new SCA vulnerability if needed, add the affected component if needed and add the vulnerability to the BOM
-			cycloneVulnerability := cdc.getOrCreateScaIssue(results.GetIssueIdentifier(cves, vulnerability.IssueId, ""), vulnerability.Summary, extractCweFromCves(cves...), severity, applicabilityStatus)
+			extendedDescription := ""
+			if vulnerability.ExtendedInformation != nil {
+				extendedDescription = vulnerability.ExtendedInformation.FullDescription
+			}
+			cycloneVulnerability := cdc.getOrCreateScaIssue(results.GetIssueIdentifier(cves, vulnerability.IssueId, ""), vulnerability.Summary, extendedDescription, extractCweFromCves(cves...), severity, applicabilityStatus)
 			if hasImpactedAffects(*cycloneVulnerability, *affectedComponent) {
 				// The affected component is already in the vulnerability
 				return
@@ -326,12 +330,12 @@ func (cdc *CmdResultsCycloneDxConverter) ParseSecrets(target results.ScanTarget,
 			}
 		}
 		// TODO: make sure with secrets team what is the CWE for secrets (212?) they should output
-		jasIssue := cdc.getOrCreateJasIssue(sarifutils.GetResultRuleId(result), sarifutils.GetRuleShortDescriptionText(rule), sarifutils.GetRuleCWE(rule), severity, applicabilityStatus, properties...)
+		jasIssue := cdc.getOrCreateJasIssue(sarifutils.GetResultRuleId(result), sarifutils.GetResultMsgText(result), sarifutils.GetRuleShortDescriptionText(rule), sarifutils.GetRuleCWE(rule), severity, applicabilityStatus, properties...)
 		// Add the location to the vulnerability
 		affectedComponent := cdx.GetComponentByIndex(cdc.bom, affectedComponentIndex)
 		addJasIssueAffects(jasIssue, *affectedComponent, cyclonedx.Property{
 			Name:  fmt.Sprintf(jasIssueLocationPropertyTemplate, "secret", affectedComponent.BOMRef),
-			Value: fmt.Sprintf("%s#L%d-L%d", sarifutils.GetLocationFileName(location), sarifutils.GetLocationStartLine(location), sarifutils.GetLocationEndLine(location)),
+			Value: fmt.Sprintf("%s#L%d-L%d", sarifutils.GetLocationSnippetText(location), sarifutils.GetLocationStartLine(location), sarifutils.GetLocationEndLine(location)),
 		})
 		return
 	})
@@ -358,7 +362,7 @@ func (cdc *CmdResultsCycloneDxConverter) ParseIacs(target results.ScanTarget, vi
 		// Create or get the affected component
 		affectedComponentIndex := cdc.getOrCreateJasComponent(location)
 		// Create a new JAS vulnerability, add it to the BOM and return it
-		jasIssue := cdc.getOrCreateJasIssue(sarifutils.GetResultRuleId(result), sarifutils.GetRuleShortDescriptionText(rule), sarifutils.GetRuleCWE(rule), severity, jasutils.Applicable)
+		jasIssue := cdc.getOrCreateJasIssue(sarifutils.GetResultRuleId(result), sarifutils.GetResultMsgText(result), sarifutils.GetRuleShortDescriptionText(rule), sarifutils.GetRuleCWE(rule), severity, jasutils.Applicable)
 		// Add the location to the vulnerability
 		affectedComponent := cdx.GetComponentByIndex(cdc.bom, affectedComponentIndex)
 		addJasIssueAffects(jasIssue, *affectedComponent, cyclonedx.Property{
@@ -378,7 +382,7 @@ func (cdc *CmdResultsCycloneDxConverter) ParseSast(target results.ScanTarget, vi
 		// Create or get the affected component
 		affectedComponentIndex := cdc.getOrCreateJasComponent(location)
 		// Create a new JAS vulnerability, add it to the BOM and return it
-		jasIssue := cdc.getOrCreateJasIssue(sarifutils.GetResultRuleId(result), sarifutils.GetRuleShortDescriptionText(rule), sarifutils.GetRuleCWE(rule), severity, jasutils.Applicable)
+		jasIssue := cdc.getOrCreateJasIssue(sarifutils.GetResultRuleId(result), sarifutils.GetResultMsgText(result), sarifutils.GetRuleShortDescriptionText(rule), sarifutils.GetRuleCWE(rule), severity, jasutils.Applicable)
 		// Add the location to the vulnerability
 		affectedComponent := cdx.GetComponentByIndex(cdc.bom, affectedComponentIndex)
 		addJasIssueAffects(jasIssue, *affectedComponent, cyclonedx.Property{
@@ -466,12 +470,13 @@ func (cdc *CmdResultsCycloneDxConverter) getExistingVulnerability(id string) *cy
 	return nil
 }
 
-func createBaseVulnerability(id, description string, cwe []string, severity severityutils.Severity, applicabilityStatus jasutils.ApplicabilityStatus, properties ...cyclonedx.Property) cyclonedx.Vulnerability {
+func createBaseVulnerability(id, details, description string, cwe []string, severity severityutils.Severity, applicabilityStatus jasutils.ApplicabilityStatus, properties ...cyclonedx.Property) cyclonedx.Vulnerability {
 	vuln := cyclonedx.Vulnerability{
 		BOMRef:      id,
 		ID:          id,
 		CWEs:        convertCweToCycloneDx(cwe),
 		Description: description,
+		Detail: 	 details,
 		Ratings: &[]cyclonedx.VulnerabilityRating{{
 			Severity: severityutils.SeverityToCycloneDxSeverity(severity),
 			Score:    severityutils.GetSeverityScoreFloat64(severity, applicabilityStatus),
@@ -509,7 +514,7 @@ func extractCWENumber(cweId string) (cweInt int, isSupportedCwe bool) {
 	return cweID, err == nil // Return the CWE ID and whether it was successfully parsed
 }
 
-func (cdc *CmdResultsCycloneDxConverter) getOrCreateScaIssue(id, description string, cwe []string, severity severityutils.Severity, applicabilityStatus jasutils.ApplicabilityStatus) (scaVulnerability *cyclonedx.Vulnerability) {
+func (cdc *CmdResultsCycloneDxConverter) getOrCreateScaIssue(id, description, extendedDescription string, cwe []string, severity severityutils.Severity, applicabilityStatus jasutils.ApplicabilityStatus) (scaVulnerability *cyclonedx.Vulnerability) {
 	if scaVulnerability = cdc.getExistingVulnerability(id); scaVulnerability != nil {
 		return
 	}
@@ -524,12 +529,12 @@ func (cdc *CmdResultsCycloneDxConverter) getOrCreateScaIssue(id, description str
 			Value: applicabilityStatus.String(),
 		})
 	}
-	vulnerability := createBaseVulnerability(id, description, cwe, severity, applicabilityStatus, properties...)
+	vulnerability := createBaseVulnerability(id, extendedDescription, description, cwe, severity, applicabilityStatus, properties...)
 	*cdc.bom.Vulnerabilities = append(*cdc.bom.Vulnerabilities, vulnerability)
 	return &(*cdc.bom.Vulnerabilities)[len(*cdc.bom.Vulnerabilities)-1]
 }
 
-func (cdc *CmdResultsCycloneDxConverter) getOrCreateJasIssue(id, description string, cwe []string, severity severityutils.Severity, applicabilityStatus jasutils.ApplicabilityStatus, properties ...cyclonedx.Property) (scaVulnerability *cyclonedx.Vulnerability) {
+func (cdc *CmdResultsCycloneDxConverter) getOrCreateJasIssue(id, msg, description string, cwe []string, severity severityutils.Severity, applicabilityStatus jasutils.ApplicabilityStatus, properties ...cyclonedx.Property) (scaVulnerability *cyclonedx.Vulnerability) {
 	if scaVulnerability = cdc.getExistingVulnerability(id); scaVulnerability != nil {
 		return
 	}
@@ -537,7 +542,7 @@ func (cdc *CmdResultsCycloneDxConverter) getOrCreateJasIssue(id, description str
 	if cdc.bom.Vulnerabilities == nil {
 		cdc.bom.Vulnerabilities = &[]cyclonedx.Vulnerability{}
 	}
-	*cdc.bom.Vulnerabilities = append(*cdc.bom.Vulnerabilities, createBaseVulnerability(id, description, cwe, severity, applicabilityStatus))
+	*cdc.bom.Vulnerabilities = append(*cdc.bom.Vulnerabilities, createBaseVulnerability(id, msg, description, cwe, severity, applicabilityStatus))
 	return &(*cdc.bom.Vulnerabilities)[len(*cdc.bom.Vulnerabilities)-1]
 }
 
