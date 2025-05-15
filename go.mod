@@ -9,12 +9,12 @@ require (
 	github.com/google/go-github/v56 v56.0.0
 	github.com/google/uuid v1.6.0
 	github.com/gookit/color v1.5.4
-	github.com/jfrog/build-info-go v1.10.11
+	github.com/jfrog/build-info-go v1.10.12
 	github.com/jfrog/froggit-go v1.17.0
 	github.com/jfrog/gofrog v1.7.6
 	github.com/jfrog/jfrog-apps-config v1.0.1
-	github.com/jfrog/jfrog-cli-artifactory v0.2.4
-	github.com/jfrog/jfrog-cli-core/v2 v2.58.4
+	github.com/jfrog/jfrog-cli-artifactory v0.3.0
+	github.com/jfrog/jfrog-cli-core/v2 v2.58.6
 	github.com/jfrog/jfrog-client-go v1.53.0
 	github.com/magiconair/properties v1.8.9
 	github.com/owenrumney/go-sarif/v2 v2.3.0
@@ -112,12 +112,12 @@ require (
 	gopkg.in/warnings.v0 v0.1.2 // indirect
 )
 
-replace github.com/jfrog/jfrog-client-go => github.com/jfrog/jfrog-client-go v1.28.1-0.20250508130334-f159cff9b11a
+// replace github.com/jfrog/jfrog-client-go => github.com/jfrog/jfrog-client-go dev
 
 // attiasas/cyclonedx
 replace github.com/jfrog/jfrog-cli-core/v2 => github.com/attiasas/jfrog-cli-core/v2 v2.0.0-20250515101643-46263f7711f4
 
-replace github.com/jfrog/jfrog-cli-artifactory => github.com/jfrog/jfrog-cli-artifactory v0.2.5-0.20250509052840-40acf11c6080
+// replace github.com/jfrog/jfrog-cli-artifactory => github.com/jfrog/jfrog-cli-artifactory main
 
 // replace github.com/jfrog/build-info-go => github.com/jfrog/build-info-go dev
 
