@@ -14,7 +14,7 @@ const (
 	WatchSarifPropertyKey                   = "watch"
 	PoliciesSarifPropertyKey                = "policies"
 	JasIssueIdSarifPropertyKey              = "issueId"
-	JasScannerIdSarifPropertyKey             = "scanner_id"
+	JasScannerIdSarifPropertyKey            = "scanner_id"
 	CWEPropertyKey                          = "CWE"
 	SarifImpactPathsRulePropertyKey         = "impactPaths"
 	TokenValidationStatusSarifPropertyKey   = "tokenValidation"

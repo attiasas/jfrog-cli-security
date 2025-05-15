@@ -27,11 +27,11 @@ import (
 const (
 	xrayToolName = "JFrog Xray Scanner"
 
-	jasIssueLocationPropertyTemplate     = "jfrog:%s:location:%s#L%dC%d-L%dC%d"
+	jasIssueLocationPropertyTemplate         = "jfrog:%s:location:%s#L%dC%d-L%dC%d"
 	secretValidationPropertyTemplate         = "jfrog:secret-validation:status:%s#L%dC%d-L%dC%d"
 	secretValidationMetadataPropertyTemplate = "jfrog:secret-validation:metadata:%s#L%dC%d-L%dC%d"
 
-	applicabilityStatusPropertyName      = "jfrog:contextual-analysis:status"
+	applicabilityStatusPropertyName = "jfrog:contextual-analysis:status"
 )
 
 var cweSupportedPattern = regexp.MustCompile(`(?:CWE-)?(\d+)`)
@@ -336,7 +336,7 @@ func (cdc *CmdResultsCycloneDxConverter) ParseSecrets(target results.ScanTarget,
 			}
 		}
 		// TODO: make sure with secrets team what is the CWE for secrets (212?) they should output
-		jasIssue := cdc.getOrCreateJasIssue(sarifutils.GetRuleScannerId(rule), sarifutils.GetResultRuleId(result), sarifutils.GetResultMsgText(result), sarifutils.GetRuleShortDescriptionText(rule), sarifutils.GetRuleCWE(rule), severity, applicabilityStatus)
+		jasIssue := cdc.getOrCreateJasIssue(sarifutils.GetResultRuleId(result), sarifutils.GetRuleScannerId(rule), sarifutils.GetResultMsgText(result), sarifutils.GetRuleShortDescriptionText(rule), sarifutils.GetRuleCWE(rule), severity, applicabilityStatus)
 		// Add the location to the vulnerability
 		properties = append(properties, cyclonedx.Property{
 			Name:  fmt.Sprintf(jasIssueLocationPropertyTemplate, "secret", affectedComponent.BOMRef, startLine, startColumn, endLine, endColumn),
@@ -368,7 +368,7 @@ func (cdc *CmdResultsCycloneDxConverter) ParseIacs(target results.ScanTarget, vi
 		// Create or get the affected component
 		affectedComponentIndex := cdc.getOrCreateJasComponent(location)
 		// Create a new JAS vulnerability, add it to the BOM and return it
-		jasIssue := cdc.getOrCreateJasIssue(sarifutils.GetRuleScannerId(rule), sarifutils.GetResultRuleId(result), sarifutils.GetResultMsgText(result), sarifutils.GetRuleShortDescriptionText(rule), sarifutils.GetRuleCWE(rule), severity, jasutils.Applicable)
+		jasIssue := cdc.getOrCreateJasIssue(sarifutils.GetResultRuleId(result), sarifutils.GetRuleScannerId(rule), sarifutils.GetResultMsgText(result), sarifutils.GetRuleShortDescriptionText(rule), sarifutils.GetRuleCWE(rule), severity, jasutils.Applicable)
 		// Add the location to the vulnerability
 		affectedComponent := cdx.GetComponentByIndex(cdc.bom, affectedComponentIndex)
 		addJasIssueAffects(jasIssue, *affectedComponent, cyclonedx.Property{
@@ -388,7 +388,7 @@ func (cdc *CmdResultsCycloneDxConverter) ParseSast(target results.ScanTarget, vi
 		// Create or get the affected component
 		affectedComponentIndex := cdc.getOrCreateJasComponent(location)
 		// Create a new JAS vulnerability, add it to the BOM and return it
-		jasIssue := cdc.getOrCreateJasIssue(sarifutils.GetRuleScannerId(rule), sarifutils.GetResultRuleId(result), sarifutils.GetResultMsgText(result), sarifutils.GetRuleShortDescriptionText(rule), sarifutils.GetRuleCWE(rule), severity, jasutils.Applicable)
+		jasIssue := cdc.getOrCreateJasIssue(sarifutils.GetResultRuleId(result), sarifutils.GetRuleScannerId(rule), sarifutils.GetResultMsgText(result), sarifutils.GetRuleShortDescriptionText(rule), sarifutils.GetRuleCWE(rule), severity, jasutils.Applicable)
 		// Add the location to the vulnerability
 		affectedComponent := cdx.GetComponentByIndex(cdc.bom, affectedComponentIndex)
 		addJasIssueAffects(jasIssue, *affectedComponent, cyclonedx.Property{
@@ -482,7 +482,7 @@ func createBaseVulnerability(ref, id, details, description string, cwe []string,
 		ID:          id,
 		CWEs:        convertCweToCycloneDx(cwe),
 		Description: description,
-		Detail: 	 details,
+		Detail:      details,
 		Ratings: &[]cyclonedx.VulnerabilityRating{{
 			Severity: severityutils.SeverityToCycloneDxSeverity(severity),
 			Score:    severityutils.GetSeverityScoreFloat64(severity, applicabilityStatus),
