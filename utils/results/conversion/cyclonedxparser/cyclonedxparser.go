@@ -323,7 +323,7 @@ func (cdc *CmdResultsCycloneDxConverter) ParseSecrets(target results.ScanTarget,
 		applicabilityStatus := jasutils.NotScanned
 		if secretValidation := results.GetSecretResultApplicability(result); secretValidation != nil {
 			// Secret validation results exist
-			applicabilityStatus = jasutils.ApplicabilityStatus(secretValidation.Status)
+			applicabilityStatus = jasutils.ConvertToApplicabilityStatus(secretValidation.Status)
 			properties = append(properties, cyclonedx.Property{
 				Name:  fmt.Sprintf(secretValidationPropertyTemplate, affectedComponent.BOMRef, startLine, startColumn, endLine, endColumn),
 				Value: secretValidation.Status,
@@ -464,12 +464,12 @@ func (cdc *CmdResultsCycloneDxConverter) getOrCreateJasComponent(location *sarif
 	return len(*cdc.bom.Components) - 1
 }
 
-func (cdc *CmdResultsCycloneDxConverter) getExistingVulnerability(id string) *cyclonedx.Vulnerability {
+func (cdc *CmdResultsCycloneDxConverter) getExistingVulnerability(ref string) *cyclonedx.Vulnerability {
 	if cdc.bom.Vulnerabilities == nil {
 		return nil
 	}
 	for _, vulnerability := range *cdc.bom.Vulnerabilities {
-		if vulnerability.ID == id {
+		if vulnerability.BOMRef == ref {
 			return &vulnerability
 		}
 	}
@@ -521,7 +521,8 @@ func extractCWENumber(cweId string) (cweInt int, isSupportedCwe bool) {
 }
 
 func (cdc *CmdResultsCycloneDxConverter) getOrCreateScaIssue(id, description, extendedDescription string, cwe []string, severity severityutils.Severity, applicabilityStatus jasutils.ApplicabilityStatus) (scaVulnerability *cyclonedx.Vulnerability) {
-	if scaVulnerability = cdc.getExistingVulnerability(id); scaVulnerability != nil {
+	ref := id
+	if scaVulnerability = cdc.getExistingVulnerability(ref); scaVulnerability != nil {
 		return
 	}
 	// Create a new SCA vulnerability, add it to the BOM and return it
@@ -535,33 +536,31 @@ func (cdc *CmdResultsCycloneDxConverter) getOrCreateScaIssue(id, description, ex
 			Value: applicabilityStatus.String(),
 		})
 	}
-	vulnerability := createBaseVulnerability(id, id, extendedDescription, description, cwe, severity, applicabilityStatus, properties...)
+	vulnerability := createBaseVulnerability(ref, id, extendedDescription, description, cwe, severity, applicabilityStatus, properties...)
 	*cdc.bom.Vulnerabilities = append(*cdc.bom.Vulnerabilities, vulnerability)
 	return &(*cdc.bom.Vulnerabilities)[len(*cdc.bom.Vulnerabilities)-1]
 }
 
 func (cdc *CmdResultsCycloneDxConverter) getOrCreateJasIssue(ref, id, msg, description string, cwe []string, severity severityutils.Severity, applicabilityStatus jasutils.ApplicabilityStatus, properties ...cyclonedx.Property) (scaVulnerability *cyclonedx.Vulnerability) {
-	if scaVulnerability = cdc.getExistingVulnerability(id); scaVulnerability != nil {
+	if scaVulnerability = cdc.getExistingVulnerability(ref); scaVulnerability != nil {
 		return
 	}
 	// Create a new SCA vulnerability, add it to the BOM and return it
 	if cdc.bom.Vulnerabilities == nil {
 		cdc.bom.Vulnerabilities = &[]cyclonedx.Vulnerability{}
 	}
-	*cdc.bom.Vulnerabilities = append(*cdc.bom.Vulnerabilities, createBaseVulnerability(ref, id, msg, description, cwe, severity, applicabilityStatus))
+	*cdc.bom.Vulnerabilities = append(*cdc.bom.Vulnerabilities, createBaseVulnerability(ref, id, msg, description, cwe, severity, applicabilityStatus, properties...))
 	return &(*cdc.bom.Vulnerabilities)[len(*cdc.bom.Vulnerabilities)-1]
 }
 
 func addJasIssueAffects(jasIssue *cyclonedx.Vulnerability, affectedComponent cyclonedx.Component, properties ...cyclonedx.Property) {
-	if hasImpactedAffects(*jasIssue, affectedComponent) {
-		// The affected component is already in the vulnerability
-		return
+	if !hasImpactedAffects(*jasIssue, affectedComponent) {
+		// The affected component is not in the vulnerability, Add the affected component to the vulnerability
+		if jasIssue.Affects == nil {
+			jasIssue.Affects = &[]cyclonedx.Affects{}
+		}
+		*jasIssue.Affects = append(*jasIssue.Affects, cyclonedx.Affects{Ref: affectedComponent.BOMRef})
 	}
-	// Add the affected component to the vulnerability
-	if jasIssue.Affects == nil {
-		jasIssue.Affects = &[]cyclonedx.Affects{}
-	}
-	*jasIssue.Affects = append(*jasIssue.Affects, cyclonedx.Affects{Ref: affectedComponent.BOMRef})
 	if len(properties) == 0 {
 		// No properties to add
 		return

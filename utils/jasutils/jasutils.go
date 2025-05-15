@@ -102,6 +102,7 @@ func SubScanTypeToJasScanType(subScanType utils.SubScanType) JasScanType {
 
 func ConvertToApplicabilityStatus(status string) ApplicabilityStatus {
 	switch status {
+	// Contextual analysis scan
 	case Applicable.String():
 		return Applicable
 	case NotApplicable.String():
@@ -111,6 +112,17 @@ func ConvertToApplicabilityStatus(status string) ApplicabilityStatus {
 	case NotCovered.String():
 		return NotCovered
 	case MissingContext.String():
+		return MissingContext
+		// Secret validation scan
+	case NotAToken.String():
+		return ApplicabilityUndetermined
+	case Active.String():
+		return Applicable
+	case Inactive.String():
+		return NotApplicable
+	case Unsupported.String():
+		return NotCovered
+	case Unavailable.String():
 		return MissingContext
 	default:
 		return NotScanned
