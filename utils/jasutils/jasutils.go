@@ -114,8 +114,6 @@ func ConvertToApplicabilityStatus(status string) ApplicabilityStatus {
 	case MissingContext.String():
 		return MissingContext
 		// Secret validation scan
-	case NotAToken.String():
-		return ApplicabilityUndetermined
 	case Active.String():
 		return Applicable
 	case Inactive.String():
@@ -123,7 +121,7 @@ func ConvertToApplicabilityStatus(status string) ApplicabilityStatus {
 	case Unsupported.String():
 		return NotCovered
 	case Unavailable.String():
-		return MissingContext
+		return ApplicabilityUndetermined
 	default:
 		return NotScanned
 	}
