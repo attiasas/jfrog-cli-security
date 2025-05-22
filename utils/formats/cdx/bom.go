@@ -3,6 +3,8 @@ package cdx
 import (
 	"fmt"
 	"net/url"
+	"path/filepath"
+	"strings"
 
 	"github.com/CycloneDX/cyclonedx-go"
 	"github.com/package-url/packageurl-go"
@@ -164,12 +166,20 @@ func CreateScaComponentFromNode(node *xrayUtils.BinaryGraphNode) (component cycl
 }
 
 func CreateFileOrDirComponent(location string) (component cyclonedx.Component) {
+	url := addUrlFileTypePrefixIfNeeded(location)
 	component = cyclonedx.Component{
-		BOMRef: GetFileRef(location),
+		BOMRef: GetFileRef(url),
 		Type:   cyclonedx.ComponentTypeFile,
-		Name:   location,
+		Name:   url,
 	}
 	return
+}
+
+func addUrlFileTypePrefixIfNeeded(location string) string {
+	if !strings.HasPrefix(location, "file://") {
+		return "file://" + filepath.ToSlash(location)
+	}
+	return location
 }
 
 func GetIdRef(id string) string {
