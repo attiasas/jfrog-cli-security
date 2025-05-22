@@ -165,31 +165,31 @@ func CreateScaComponentFromNode(node *xrayUtils.BinaryGraphNode) (component cycl
 	return
 }
 
-func CreateFileOrDirComponent(location string) (component cyclonedx.Component) {
-	url := addUrlFileTypePrefixIfNeeded(location)
+func CreateFileOrDirComponent(filePathOrUri string) (component cyclonedx.Component) {
 	component = cyclonedx.Component{
-		BOMRef: GetFileRef(url),
+		BOMRef: GetFileRef(filePathOrUri),
 		Type:   cyclonedx.ComponentTypeFile,
-		Name:   url,
+		Name:   convertToFileUrlIfNeeded(filePathOrUri),
 	}
 	return
 }
 
-func addUrlFileTypePrefixIfNeeded(location string) string {
+func convertToFileUrlIfNeeded(location string) string {
 	if !strings.HasPrefix(location, "file://") {
 		return "file://" + filepath.ToSlash(location)
 	}
-	return location
+	return filepath.ToSlash(location)
 }
 
 func GetIdRef(id string) string {
 	return fmt.Sprintf("urn:uuid:%s", id)
 }
 
-func GetFileRef(filePath string) string {
-	wdRef, err := utils.Md5Hash(filePath)
+func GetFileRef(filePathOrUri string) string {
+	uri := convertToFileUrlIfNeeded(filePathOrUri)
+	wdRef, err := utils.Md5Hash(uri)
 	if err != nil {
-		return filePath
+		return uri
 	}
 	return wdRef
 }
@@ -205,6 +205,18 @@ func SearchDependencyEntry(dependencies *[]cyclonedx.Dependency, ref string) *cy
 	for _, dependency := range *dependencies {
 		if dependency.Ref == ref {
 			return &dependency
+		}
+	}
+	return nil
+}
+
+func SearchProperty(properties *[]cyclonedx.Property, name string) *cyclonedx.Property {
+	if properties == nil || len(*properties) == 0 {
+		return nil
+	}
+	for _, property := range *properties {
+		if property.Name == name {
+			return &property
 		}
 	}
 	return nil

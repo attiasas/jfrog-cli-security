@@ -768,3 +768,30 @@ func GetSecretResultApplicability(result *sarif.Result) *formats.Applicability {
 	}
 	return &formats.Applicability{Status: status, ScannerDescription: statusDescription}
 }
+
+func ExtractCweFromCves(cves ...formats.CveRow) (cwe []string) {
+	if len(cves) == 0 {
+		return
+	}
+	// Make sure unique
+	cweMap := datastructures.MakeSet[string]()
+	for _, cve := range cves {
+		if len(cve.Cwe) == 0 {
+			continue
+		}
+		cweMap.AddElements(cve.Cwe...)
+	}
+	return cweMap.ToSlice()
+}
+
+func GetActualCves(issueId string, cves []formats.CveRow) (ids []string, statuses []*formats.Applicability) {
+	if len(cves) == 0 {
+		ids = append(ids, issueId)
+		statuses = append(statuses, nil)
+	}
+	for _, cve := range cves {
+		ids = append(ids, cve.Id)
+		statuses = append(statuses, cve.Applicability)
+	}
+	return
+}
