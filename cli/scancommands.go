@@ -185,7 +185,7 @@ func UploadCdxCmd(c *components.Context) error {
 		return err
 	}
 	uploadCmd := upload.NewUploadCycloneDxCommand().SetFileToUpload(c.Arguments[0]).
-		SetUploadRepository(c.GetStringFlagValue(flags.RepoPath)).
+		SetUploadRepository(c.GetStringFlagValue(flags.UploadRepoPath)).
 		SetServerDetails(serverDetails)
 	return commandsCommon.Exec(uploadCmd)
 }
@@ -298,7 +298,7 @@ func getMinimumSeverity(c *components.Context) (severity severityutils.Severity,
 }
 
 func addTrailingSlashToRepoPathIfNeeded(c *components.Context) string {
-	repoPath := c.GetStringFlagValue(flags.RepoPath)
+	repoPath := c.GetStringFlagValue(flags.ScanRepoPath)
 	if repoPath != "" && !strings.Contains(repoPath, "/") {
 		// In case only repo name was provided (no path) we are adding a trailing slash.
 		repoPath += "/"
@@ -320,7 +320,7 @@ func createDefaultScanSpec(c *components.Context, defaultTarget string) *spec.Sp
 
 func shouldIncludeVulnerabilities(c *components.Context) bool {
 	// If no context was provided by the user, no Violations will be triggered by Xray, so include general vulnerabilities in the command output
-	return c.GetStringFlagValue(flags.Watches) == "" && !isProjectProvided(c) && c.GetStringFlagValue(flags.RepoPath) == ""
+	return c.GetStringFlagValue(flags.Watches) == "" && !isProjectProvided(c) && c.GetStringFlagValue(flags.ScanRepoPath) == ""
 }
 
 // Scan published builds with Xray

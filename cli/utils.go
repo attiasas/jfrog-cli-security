@@ -35,7 +35,7 @@ func validateConnectionAndViolationContextInputs(c *components.Context, serverDe
 	if isProjectProvided(c) {
 		contextFlag++
 	}
-	if c.GetStringFlagValue(flags.RepoPath) != "" {
+	if c.GetStringFlagValue(flags.ScanRepoPath) != "" {
 		contextFlag++
 	}
 	if contextFlag > 1 {
