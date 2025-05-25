@@ -3,6 +3,9 @@ package cli
 import (
 	"errors"
 	"fmt"
+	"os"
+	"strings"
+
 	buildInfoUtils "github.com/jfrog/build-info-go/utils"
 	"github.com/jfrog/gofrog/datastructures"
 	"github.com/jfrog/jfrog-cli-core/v2/common/cliutils"
@@ -16,12 +19,11 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	enrichDocs "github.com/jfrog/jfrog-cli-security/cli/docs/enrich"
 	"github.com/jfrog/jfrog-cli-security/commands/enrich"
+	"github.com/jfrog/jfrog-cli-security/commands/upload"
 	"github.com/jfrog/jfrog-cli-security/utils/xray"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/urfave/cli"
-	"os"
-	"strings"
 
 	flags "github.com/jfrog/jfrog-cli-security/cli/docs"
 	auditSpecificDocs "github.com/jfrog/jfrog-cli-security/cli/docs/auditspecific"
@@ -30,6 +32,7 @@ import (
 	curationDocs "github.com/jfrog/jfrog-cli-security/cli/docs/scan/curation"
 	dockerScanDocs "github.com/jfrog/jfrog-cli-security/cli/docs/scan/dockerscan"
 	scanDocs "github.com/jfrog/jfrog-cli-security/cli/docs/scan/scan"
+	uploadCdxDocs "github.com/jfrog/jfrog-cli-security/cli/docs/upload"
 
 	"github.com/jfrog/jfrog-cli-security/commands/audit"
 	"github.com/jfrog/jfrog-cli-security/commands/curation"
@@ -54,7 +57,7 @@ func getAuditAndScansCommands() []components.Command {
 			Action:      ScanCmd,
 		},
 		{
-			Name:        "sbom-enrich",
+			Name:        flags.Enrich,
 			Aliases:     []string{"se"},
 			Flags:       flags.GetCommandFlags(flags.Enrich),
 			Description: enrichDocs.GetDescription(),
@@ -63,7 +66,7 @@ func getAuditAndScansCommands() []components.Command {
 			Action:      EnrichCmd,
 		},
 		{
-			Name:        "build-scan",
+			Name:        flags.BuildScan,
 			Aliases:     []string{"bs"},
 			Flags:       flags.GetCommandFlags(flags.BuildScan),
 			Description: buildScanDocs.GetDescription(),
@@ -85,7 +88,7 @@ func getAuditAndScansCommands() []components.Command {
 			Hidden: true,
 		},
 		{
-			Name:        "audit",
+			Name:        flags.Audit,
 			Aliases:     []string{"aud"},
 			Flags:       flags.GetCommandFlags(flags.Audit),
 			Description: auditDocs.GetDescription(),
@@ -93,14 +96,22 @@ func getAuditAndScansCommands() []components.Command {
 			Action:      AuditCmd,
 		},
 		{
-			Name:        "curation-audit",
+			Name:        flags.CurationAudit,
 			Aliases:     []string{"ca"},
 			Flags:       flags.GetCommandFlags(flags.CurationAudit),
 			Description: curationDocs.GetDescription(),
 			Category:    securityCategory,
 			Action:      CurationCmd,
 		},
-
+		{
+			Name:        flags.UploadCdx,
+			Aliases:     []string{"ucdx"},
+			Flags:       flags.GetCommandFlags(flags.UploadCdx),
+			Arguments:   uploadCdxDocs.GetArguments(),
+			Description: uploadCdxDocs.GetDescription(),
+			Category:    securityCategory,
+			Action:      UploadCdxCmd,
+		},
 		// TODO: Deprecated commands (remove at next CLI major version)
 		{
 			Name:        "audit-mvn",
@@ -113,7 +124,7 @@ func getAuditAndScansCommands() []components.Command {
 			Hidden: true,
 		},
 		{
-			Name:        "audit-gradle",
+			Name:        flags.AuditGradle,
 			Aliases:     []string{"ag"},
 			Flags:       flags.GetCommandFlags(flags.AuditGradle),
 			Description: auditSpecificDocs.GetGradleDescription(),
@@ -123,7 +134,7 @@ func getAuditAndScansCommands() []components.Command {
 			Hidden: true,
 		},
 		{
-			Name:        "audit-npm",
+			Name:        flags.AuditNpm,
 			Aliases:     []string{"an"},
 			Flags:       flags.GetCommandFlags(flags.AuditNpm),
 			Description: auditSpecificDocs.GetNpmDescription(),
@@ -133,7 +144,7 @@ func getAuditAndScansCommands() []components.Command {
 			Hidden: true,
 		},
 		{
-			Name:        "audit-go",
+			Name:        flags.AuditGo,
 			Aliases:     []string{"ago"},
 			Flags:       flags.GetCommandFlags(flags.AuditGo),
 			Description: auditSpecificDocs.GetGoDescription(),
@@ -143,7 +154,7 @@ func getAuditAndScansCommands() []components.Command {
 			Hidden: true,
 		},
 		{
-			Name:        "audit-pip",
+			Name:        flags.AuditPip,
 			Aliases:     []string{"ap"},
 			Flags:       flags.GetCommandFlags(flags.AuditPip),
 			Description: auditSpecificDocs.GetPipDescription(),
@@ -153,7 +164,7 @@ func getAuditAndScansCommands() []components.Command {
 			Hidden: true,
 		},
 		{
-			Name:        "audit-pipenv",
+			Name:        flags.AuditPipenv,
 			Aliases:     []string{"ape"},
 			Flags:       flags.GetCommandFlags(flags.AuditPipenv),
 			Description: auditSpecificDocs.GetPipenvDescription(),
@@ -163,6 +174,20 @@ func getAuditAndScansCommands() []components.Command {
 			Hidden: true,
 		},
 	}
+}
+
+func UploadCdxCmd(c *components.Context) error {
+	if len(c.Arguments) == 0 {
+		return pluginsCommon.PrintHelpAndReturnError("providing a file path argument is mandatory", c)
+	}
+	serverDetails, err := createServerDetailsWithConfigOffer(c)
+	if err != nil {
+		return err
+	}
+	uploadCmd := upload.NewUploadCycloneDxCommand().SetFileToUpload(c.Arguments[0]).
+		SetUploadRepository(c.GetStringFlagValue(flags.RepoPath)).
+		SetServerDetails(serverDetails)
+	return commandsCommon.Exec(uploadCmd)
 }
 
 func EnrichCmd(c *components.Context) error {
@@ -184,11 +209,11 @@ func EnrichCmd(c *components.Context) error {
 	if err != nil {
 		return err
 	}
-	EnrichCmd := enrich.NewEnrichCommand().
+	enrichCmd := enrich.NewEnrichCommand().
 		SetServerDetails(serverDetails).
 		SetThreads(threads).
 		SetSpec(specFile)
-	return commandsCommon.Exec(EnrichCmd)
+	return commandsCommon.Exec(enrichCmd)
 }
 
 func ScanCmd(c *components.Context) error {
@@ -253,8 +278,7 @@ func ScanCmd(c *components.Context) error {
 		SetPrintExtendedTable(c.GetBoolFlagValue(flags.ExtendedTable)).
 		SetBypassArchiveLimits(c.GetBoolFlagValue(flags.BypassArchiveLimits)).
 		SetFixableOnly(c.GetBoolFlagValue(flags.FixableOnly)).
-		SetMinSeverityFilter(minSeverity).
-		SetScanResultRepository(c.GetStringFlagValue(flags.ScanResultsRepository))
+		SetMinSeverityFilter(minSeverity)
 	if c.IsFlagSet(flags.Watches) {
 		scanCmd.SetWatches(splitByCommaAndTrim(c.GetStringFlagValue(flags.Watches)))
 	}
@@ -419,7 +443,7 @@ func CreateAuditCmd(c *components.Context) (string, string, *coreConfig.ServerDe
 		SetMinSeverityFilter(minSeverity).
 		SetFixableOnly(c.GetBoolFlagValue(flags.FixableOnly)).
 		SetThirdPartyApplicabilityScan(c.GetBoolFlagValue(flags.ThirdPartyContextualAnalysis)).
-		SetScansResultsOutputDir(scansOutputDir).SetScansResultsRepository(c.GetStringFlagValue(flags.ScanResultsRepository))
+		SetScansResultsOutputDir(scansOutputDir)
 
 	if c.GetStringFlagValue(flags.Watches) != "" {
 		auditCmd.SetWatches(splitByCommaAndTrim(c.GetStringFlagValue(flags.Watches)))
@@ -682,8 +706,7 @@ func DockerScan(c *components.Context, image string) error {
 		SetFixableOnly(c.GetBoolFlagValue(flags.FixableOnly)).
 		SetMinSeverityFilter(minSeverity).
 		SetThreads(threads).
-		SetSecretValidation(c.GetBoolFlagValue(flags.SecretValidation)).
-		SetScanResultRepository(c.GetStringFlagValue(flags.ScanResultsRepository))
+		SetSecretValidation(c.GetBoolFlagValue(flags.SecretValidation))
 	if c.GetStringFlagValue(flags.Watches) != "" {
 		containerScanCommand.SetWatches(splitByCommaAndTrim(c.GetStringFlagValue(flags.Watches)))
 	}

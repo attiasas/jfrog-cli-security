@@ -190,7 +190,7 @@ func (auditCmd *AuditCommand) Run() (err error) {
 		)).
 		SetThirdPartyApplicabilityScan(auditCmd.thirdPartyApplicabilityScan).
 		SetThreads(auditCmd.Threads).
-		SetScansResultsOutputDir(auditCmd.scanResultsOutputDir).SetScansResultsRepository(auditCmd.scanResultsRepository).SetStartTime(startTime).SetMultiScanId(multiScanId)
+		SetScansResultsOutputDir(auditCmd.scanResultsOutputDir).SetStartTime(startTime).SetMultiScanId(multiScanId)
 	auditParams.SetIsRecursiveScan(isRecursiveScan).SetExclusions(auditCmd.Exclusions())
 
 	auditResults := RunAudit(auditParams)
@@ -202,7 +202,7 @@ func (auditCmd *AuditCommand) Run() (err error) {
 			return errors.Join(err, auditResults.GetErrors())
 		}
 	}
-	return ProcessResultsAndOutput(serverDetails, auditResults, auditCmd.getResultWriter(auditResults), auditCmd.Fail, auditParams.scanResultsOutputDir, auditParams.scanResultsRepository)
+	return ProcessResultsAndOutput(serverDetails, auditResults, auditCmd.getResultWriter(auditResults), auditCmd.Fail, auditParams.scanResultsOutputDir)
 }
 
 // Runs an audit scan based on the provided auditParams.
@@ -517,12 +517,7 @@ func (auditCmd *AuditCommand) getResultWriter(cmdResults *results.SecurityComman
 		SetSubScansPerformed(auditCmd.ScansToPerform())
 }
 
-func ProcessResultsAndOutput(serverDetails *config.ServerDetails, auditResults *results.SecurityCommandResults, outputWriter *output.ResultsWriter, failBuild bool, scanResultsOutputDir, scanResultsRepository string) (err error) {
-	// Upload the scan results to a JFrog repository
-	if err = outputWriter.UploadCdxScanResults(serverDetails, scanResultsRepository, scanResultsOutputDir); err != nil {
-		// Error uploading the scan results, return the error and the scan results errors.
-		return errors.Join(err, auditResults.GetErrors())
-	}
+func ProcessResultsAndOutput(serverDetails *config.ServerDetails, auditResults *results.SecurityCommandResults, outputWriter *output.ResultsWriter, failBuild bool, scanResultsOutputDir string) (err error) {
 	if err = outputWriter.PrintScanResults(); err != nil {
 		// Error printing the results, return the error and the scan results errors.
 		return errors.Join(err, auditResults.GetErrors())

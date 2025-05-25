@@ -26,7 +26,6 @@ type AuditParams struct {
 	thirdPartyApplicabilityScan bool
 	threads                     int
 	scanResultsOutputDir        string
-	scanResultsRepository       string
 	startTime                   time.Time
 	// Dynamic logic params
 	scanStrategy scaRunner.SbomScanStrategy
@@ -143,11 +142,6 @@ func (params *AuditParams) SetResultsContext(resultsContext results.ResultContex
 
 func (params *AuditParams) SetScansResultsOutputDir(outputDir string) *AuditParams {
 	params.scanResultsOutputDir = outputDir
-	return params
-}
-
-func (params *AuditParams) SetScansResultsRepository(repository string) *AuditParams {
-	params.scanResultsRepository = repository
 	return params
 }
 

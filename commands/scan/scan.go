@@ -73,12 +73,11 @@ type ScanCommand struct {
 	commandSupportsJAS bool
 	targetNameOverride string
 
-	resultsContext        results.ResultContext
-	scanResultsRepository string
-	xrayVersion           string
-	xscVersion            string
-	multiScanId           string
-	startTime             time.Time
+	resultsContext results.ResultContext
+	xrayVersion    string
+	xscVersion     string
+	multiScanId    string
+	startTime      time.Time
 	// Dynamic logic params
 	scanStrategy scaRunner.SbomScanStrategy
 	bomGenerator bom.SbomGenerator
@@ -192,11 +191,6 @@ func (scanCmd *ScanCommand) SetXscVersion(xscVersion string) *ScanCommand {
 	return scanCmd
 }
 
-func (scanCmd *ScanCommand) SetScanResultRepository(repository string) *ScanCommand {
-	scanCmd.scanResultsRepository = repository
-	return scanCmd
-}
-
 // func (scanCmd *ScanCommand) indexFile(filePath string) (*xrayUtils.BinaryGraphNode, error) {
 // 	var indexerResults xrayUtils.BinaryGraphNode
 // 	indexerCmd := exec.Command(scanCmd.indexerPath, indexingCommand, filePath, "--temp-dir", scanCmd.indexerTempDir)
@@ -270,12 +264,6 @@ func (scanCmd *ScanCommand) RunAndRecordResults(cmdType utils.CommandType, recor
 		SetIsMultipleRootProject(cmdResults.HasMultipleTargets())
 
 	if err = outputWriter.PrintScanResults(); err != nil {
-		return errors.Join(err, cmdResults.GetErrors())
-	}
-
-	// Upload the scan results to a JFrog repository
-	if err = outputWriter.UploadCdxScanResults(scanCmd.serverDetails, scanCmd.scanResultsRepository, ""); err != nil {
-		// Error uploading the scan results, return the error and the scan results errors.
 		return errors.Join(err, cmdResults.GetErrors())
 	}
 

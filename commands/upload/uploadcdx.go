@@ -1,0 +1,88 @@
+package upload
+
+import (
+	"fmt"
+	"os"
+
+	"github.com/CycloneDX/cyclonedx-go"
+	"github.com/jfrog/jfrog-client-go/utils/errorutils"
+	ioUtils "github.com/jfrog/jfrog-client-go/utils/io"
+	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
+
+	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
+
+	"github.com/jfrog/jfrog-cli-security/utils/artifactory"
+)
+
+type UploadCycloneDxCommand struct {
+	serverDetails *config.ServerDetails
+	progress      ioUtils.ProgressMgr
+
+	fileToUpload          string
+	scanResultsRepository string
+}
+
+func NewUploadCycloneDxCommand() *UploadCycloneDxCommand {
+	return &UploadCycloneDxCommand{}
+}
+
+func (ucc *UploadCycloneDxCommand) CommandName() string {
+	return "upload-cdx"
+}
+
+func (ucc *UploadCycloneDxCommand) SetFileToUpload(filePath string) *UploadCycloneDxCommand {
+	ucc.fileToUpload = filePath
+	return ucc
+}
+
+func (ucc *UploadCycloneDxCommand) SetUploadRepository(repo string) *UploadCycloneDxCommand {
+	ucc.scanResultsRepository = repo
+	return ucc
+}
+
+func (ucc *UploadCycloneDxCommand) SetProgress(progress ioUtils.ProgressMgr) {
+	ucc.progress = progress
+}
+
+func (ucc *UploadCycloneDxCommand) SetServerDetails(server *config.ServerDetails) *UploadCycloneDxCommand {
+	ucc.serverDetails = server
+	return ucc
+}
+
+func (ucc *UploadCycloneDxCommand) ServerDetails() (*config.ServerDetails, error) {
+	return ucc.serverDetails, nil
+}
+
+func (ucc *UploadCycloneDxCommand) Run() (err error) {
+	// Validate the file is cdx
+	if err = validateInputFile(ucc.fileToUpload); err != nil {
+		return
+	}
+	// Upload the file to the JFrog repository
+	return ucc.UploadCdxFile(ucc.fileToUpload)
+}
+
+func validateInputFile(cdxFilePath string) (err error) {
+	// check if the file exists
+	if exists, err := fileutils.IsFileExists(cdxFilePath, false); err != nil {
+		return fmt.Errorf("failed to check if file %s exists: %w", cdxFilePath, err)
+	} else if !exists {
+		return fmt.Errorf("provided path '%s' is not existing file", cdxFilePath)
+	}
+	// check if the file is a valid cdx file
+	bom := cyclonedx.NewBOM()
+	file, err := os.Open(cdxFilePath)
+	if errorutils.CheckError(err) != nil {
+		return fmt.Errorf("failed to open cdx file %s: %w", cdxFilePath, err)
+	}
+	if err = cyclonedx.NewBOMDecoder(file, cyclonedx.BOMFileFormatJSON).Decode(bom); err != nil {
+		return fmt.Errorf("failed to decode provided cdx file %s: %w", cdxFilePath, err)
+	}
+	// No error means the file is valid
+	return nil
+}
+
+// Upload the scan results to a JFrog repository
+func (ucc *UploadCycloneDxCommand) UploadCdxFile(cdxFilePath string) error {
+	return artifactory.UploadCdxScanResults(ucc.serverDetails, ucc.scanResultsRepository, cdxFilePath)
+}

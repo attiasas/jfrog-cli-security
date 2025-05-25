@@ -61,7 +61,7 @@ func (gaCmd *GitAuditCommand) Run() (err error) {
 			return errors.Join(err, auditResults.GetErrors())
 		}
 	}
-	return sourceAudit.ProcessResultsAndOutput(gaCmd.serverDetails, auditResults, gaCmd.getResultWriter(auditResults), gaCmd.failBuild, gaCmd.scanResultsRepository, gaCmd.scanResultsOutputDir)
+	return sourceAudit.ProcessResultsAndOutput(gaCmd.serverDetails, auditResults, gaCmd.getResultWriter(auditResults), gaCmd.failBuild, gaCmd.scanResultsOutputDir)
 }
 
 func DetectGitInfo(wd string) (gitInfo *services.XscGitInfoContext, err error) {
@@ -93,7 +93,7 @@ func toAuditParams(params GitAuditParams) *sourceAudit.AuditParams {
 	// Scan params
 	auditParams.SetThreads(params.threads).SetWorkingDirs([]string{params.repositoryLocalPath}).SetExclusions(params.exclusions).SetScansToPerform(params.scansToPerform)
 	// Output params
-	auditParams.SetScansResultsRepository(params.scanResultsRepository).SetScansResultsOutputDir(params.scanResultsOutputDir).SetOutputFormat(params.outputFormat)
+	auditParams.SetScansResultsOutputDir(params.scanResultsOutputDir).SetOutputFormat(params.outputFormat)
 	// Cmd information
 	auditParams.SetMultiScanId(params.multiScanId).SetStartTime(params.startTime)
 	// Basic params
