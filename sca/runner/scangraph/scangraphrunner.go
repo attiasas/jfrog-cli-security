@@ -2,6 +2,7 @@ package scangraph
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/CycloneDX/cyclonedx-go"
 	"github.com/jfrog/jfrog-cli-security/sca/runner"
@@ -137,6 +138,12 @@ func (sgs *JfrogScanGraphStrategy) RunXrayDependenciesTreeScanGraph(target *cycl
 	params.XrayGraphScanParams().ScanType = services.Dependency
 	// Convert BOM to tree and set the flat dependency tree to the scan parameters to improve net performance.
 	flatDepTree, fullDepTree := cdx.BomToTree(target)
+	search := "github.com/open-policy-agent"
+	for i := range flatDepTree.Nodes {
+		if strings.Contains(flatDepTree.Nodes[i].Id, search) {
+			log.Debug(fmt.Sprintf("Found dependency with id '%s' in the flat dependency tree", flatDepTree.Nodes[i].Id))
+		}
+	}
 	params.XrayGraphScanParams().DependenciesGraph = flatDepTree
 	// Set Technology param
 	technology := sgs.Technology()

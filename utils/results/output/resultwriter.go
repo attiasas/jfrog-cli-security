@@ -160,18 +160,6 @@ func (rw *ResultsWriter) printSarif() error {
 	return nil
 }
 
-func (rw *ResultsWriter) SaveAsCycloneDxFile(pathToSave string) error {
-	bom, err := rw.createResultsConvertor(true).ConvertToCycloneDx(rw.commandResults)
-	if err != nil {
-		return err
-	}
-	file, err := os.Create(pathToSave)
-	if err != nil {
-		return errorutils.CheckError(err)
-	}
-	return cyclonedx.NewBOMEncoder(file, cyclonedx.BOMFileFormatJSON).SetPretty(true).Encode(bom)
-}
-
 func (rw *ResultsWriter) printCycloneDx() error {
 	bom, err := rw.createResultsConvertor(true).ConvertToCycloneDx(rw.commandResults)
 	if err != nil {

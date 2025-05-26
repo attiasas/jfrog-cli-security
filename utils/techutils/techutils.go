@@ -97,7 +97,7 @@ var packageTypes = map[string]string{
 }
 
 // The identifier of the package type used in cdx.
-var gdxPackageTypes = map[string]string{
+var cdxPackageTypes = map[string]string{
 	"gav":      "maven",
 	"docker":   "docker",
 	"rpm":      "rpm",
@@ -782,9 +782,18 @@ func ToXrayComponentId(compName, version, packageType string) (output string) {
 	return
 }
 
-func ToGdxPackageType(packageType string) string {
-	if gdxPackageType, exist := gdxPackageTypes[packageType]; exist {
-		return gdxPackageType
+func ToCdxPackageType(packageType string) string {
+	if cdxPackageType, exist := cdxPackageTypes[packageType]; exist {
+		return cdxPackageType
 	}
 	return packageType
+}
+
+func CdxPackageTypeToXrayPackageType(cdxPackageType string) string {
+	for xrayPackageType, cdxType := range cdxPackageTypes {
+		if cdxType == cdxPackageType {
+			return xrayPackageType
+		}
+	}
+	return cdxPackageType
 }

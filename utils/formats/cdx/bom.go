@@ -102,17 +102,17 @@ func propertiesToMap(properties ...cyclonedx.Property) (propertiesMap map[string
 // Extract the component name, version and type from PackageUrl and translate it to an Xray component id
 func PurlToXrayComponentId(purl string) (xrayComponentId string) {
 	compName, compVersion, compType := SplitPackageURL(purl)
-	return techutils.ToXrayComponentId(compName, compVersion, compType)
+	return techutils.ToXrayComponentId(compName, compVersion, techutils.CdxPackageTypeToXrayPackageType(compType))
 }
 
 func XrayComponentIdToPurl(xrayComponentId string) (purl string) {
 	compName, compVersion, compType := techutils.SplitComponentIdRaw(xrayComponentId)
-	return ToPackageUrl(compName, compVersion, techutils.ToGdxPackageType(compType))
+	return ToPackageUrl(compName, compVersion, techutils.ToCdxPackageType(compType))
 }
 
 func GetScaComponentRef(xrayImpactedPackageId string) string {
 	compName, compVersion, compType := techutils.SplitComponentIdRaw(xrayImpactedPackageId)
-	return ToPackageUrl(compName, compVersion, techutils.ToGdxPackageType(compType))
+	return ToPackageUrl(compName, compVersion, techutils.ToCdxPackageType(compType))
 }
 
 func CreateScaComponent(xrayImpactedPackageId string, properties ...cyclonedx.Property) (component cyclonedx.Component) {
@@ -122,7 +122,7 @@ func CreateScaComponent(xrayImpactedPackageId string, properties ...cyclonedx.Pr
 		Type:       cyclonedx.ComponentTypeLibrary,
 		Name:       compName,
 		Version:    compVersion,
-		PackageURL: ToPackageUrl(compName, compVersion, techutils.ToGdxPackageType(compType)),
+		PackageURL: ToPackageUrl(compName, compVersion, techutils.ToCdxPackageType(compType)),
 	}
 	if len(properties) > 0 {
 		component.Properties = &properties
@@ -338,8 +338,13 @@ func BomToFullTree(sbom *cyclonedx.BOM) (fullDependencyTrees []*xrayUtils.GraphN
 }
 
 func populateDepsNodeDataFromBom(node *xrayUtils.GraphNode, sbom *cyclonedx.BOM) {
+	if node == nil || node.NodeHasLoop() {
+		// If the node is nil or has a loop, return
+		return
+	}
 	for _, dep := range getDirectDependencies(sbom, node.Id) {
 		depNode := &xrayUtils.GraphNode{Id: dep, Parent: node}
+		// log.Debug(fmt.Sprintf("Adding dependency node: %s to parent node: %s", depNode.Id, node.Id))
 		// Add the dependency to the current node
 		node.Nodes = append(node.Nodes, depNode)
 		// Recursively populate the node data

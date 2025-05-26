@@ -5,12 +5,14 @@ import (
 	"os"
 
 	"github.com/CycloneDX/cyclonedx-go"
+	"github.com/jfrog/gofrog/log"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	ioUtils "github.com/jfrog/jfrog-client-go/utils/io"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 
+	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/artifactory"
 )
 
@@ -70,16 +72,28 @@ func validateInputFile(cdxFilePath string) (err error) {
 		return fmt.Errorf("provided path '%s' is not existing file", cdxFilePath)
 	}
 	// check if the file is a valid cdx file
-	bom := cyclonedx.NewBOM()
-	file, err := os.Open(cdxFilePath)
-	if errorutils.CheckError(err) != nil {
-		return fmt.Errorf("failed to open cdx file %s: %w", cdxFilePath, err)
+	bom, err := readSbomFile(cdxFilePath)
+	if err != nil || bom == nil {
+		return fmt.Errorf("provided file %s is not a valid CycloneDX SBOM: %w", cdxFilePath, err)
 	}
-	if err = cyclonedx.NewBOMDecoder(file, cyclonedx.BOMFileFormatJSON).Decode(bom); err != nil {
-		return fmt.Errorf("failed to decode provided cdx file %s: %w", cdxFilePath, err)
+	metadata, err := utils.GetAsJsonString(bom.Metadata, true, true)
+	if err == nil {
+		log.Debug(fmt.Sprintf("found valid CycloneDX SBOM file:\n%s", metadata))
 	}
 	// No error means the file is valid
 	return nil
+}
+
+func readSbomFile(cdxFilePath string) (*cyclonedx.BOM, error) {
+	bom := cyclonedx.NewBOM()
+	file, err := os.Open(cdxFilePath)
+	if errorutils.CheckError(err) != nil {
+		return nil, fmt.Errorf("failed to open cdx file %s: %w", cdxFilePath, err)
+	}
+	if err = cyclonedx.NewBOMDecoder(file, cyclonedx.BOMFileFormatJSON).Decode(bom); err != nil {
+		return nil, fmt.Errorf("failed to decode provided cdx file %s: %w", cdxFilePath, err)
+	}
+	return bom, nil
 }
 
 // Upload the scan results to a JFrog repository

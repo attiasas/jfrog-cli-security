@@ -6,11 +6,13 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	xscutils "github.com/jfrog/jfrog-client-go/xsc/services/utils"
-	orderedJson "github.com/virtuald/go-ordered-json"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/CycloneDX/cyclonedx-go"
+	xscutils "github.com/jfrog/jfrog-client-go/xsc/services/utils"
+	orderedJson "github.com/virtuald/go-ordered-json"
 
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"golang.org/x/exp/slices"
@@ -263,6 +265,22 @@ func splitEnvVar(envVar string) (key, value string) {
 		return split[0], ""
 	}
 	return split[0], strings.Join(split[1:], "=")
+}
+
+func DumpCdxContentToFile(bom *cyclonedx.BOM, scanResultsOutputDir string) (err error) {
+	if bom == nil || bom.Metadata == nil || bom.Metadata.Component == nil {
+		return fmt.Errorf("failed to write CycloneDX SBOM to file: BOM or BOM metadata is nil")
+	}
+	var fileHash string
+	if fileHash, err = Md5Hash(bom.SerialNumber, bom.Metadata.Component.BOMRef, time.Now().String()); err != nil {
+		return fmt.Errorf("failed to write CycloneDX SBOM to file: %s", err.Error())
+	}
+	pathToSave := filepath.Join(scanResultsOutputDir, fmt.Sprintf("bom_%s.cdx.json", fileHash))
+	file, err := os.Create(pathToSave)
+	if err != nil {
+		return errorutils.CheckError(err)
+	}
+	return cyclonedx.NewBOMEncoder(file, cyclonedx.BOMFileFormatJSON).SetPretty(true).Encode(bom)
 }
 
 func DumpContentToFile(fileContent []byte, scanResultsOutputDir string, scanType string) (err error) {
