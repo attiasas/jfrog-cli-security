@@ -61,6 +61,10 @@ func (jbg *JfrogSourceCodeBomGenerator) GenerateSbom(target results.ScanTarget) 
 			generalError = errors.Join(generalError, errorutils.CheckError(os.Chdir(currentWorkingDir)))
 		}()
 	}
+	if target.Technology == techutils.NoTech {
+		log.Debug(fmt.Sprintf("No technology was detected for target '%s'. Skipping dependency tree generation.", target.Target))
+		return
+	}
 	log.Debug(fmt.Sprintf("Generating '%s' dependency tree...", target.Target))
 	treeResult, bdtErr := buildDependencyTree(target, jbg.params)
 	if bdtErr != nil {
