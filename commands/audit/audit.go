@@ -319,6 +319,9 @@ func populateScanTargets(cmdResults *results.SecurityCommandResults, params *Aud
 			continue
 		}
 		targetResult.Sbom = sbom
+		if params.scanResultsOutputDir == "" {
+			continue
+		}
 		if err = utils.DumpCdxContentToFile(sbom, params.scanResultsOutputDir); err != nil {
 			log.Warn(fmt.Sprintf("Failed to dump CycloneDX SBOM for %s: %s", targetResult.Target, err.Error()))
 		}
