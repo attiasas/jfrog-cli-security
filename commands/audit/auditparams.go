@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/jfrog/jfrog-cli-security/sca/bom"
+	bomgen "github.com/jfrog/jfrog-cli-security/sca/bom"
 	scaRunner "github.com/jfrog/jfrog-cli-security/sca/runner"
 	jfrogScanGraph "github.com/jfrog/jfrog-cli-security/sca/runner/scangraph"
 	xrayutils "github.com/jfrog/jfrog-cli-security/utils"
@@ -27,6 +28,7 @@ type AuditParams struct {
 	threads                     int
 	scanResultsOutputDir        string
 	startTime                   time.Time
+	newScaEngine                bool
 	// Dynamic logic params
 	scanStrategy scaRunner.SbomScanStrategy
 	bomGenerator bom.SbomGenerator
@@ -67,6 +69,17 @@ func (params *AuditParams) InstallFunc() func(tech string) error {
 
 func (params *AuditParams) WorkingDirs() []string {
 	return params.workingDirs
+}
+
+func (params *AuditParams) SetNewScaEngine(newScaEngine bool) *AuditParams {
+	if newScaEngine {
+		params.bomGenerator = &bomgen.JfrogNewBomGenerator{}
+	} else {
+		params.bomGenerator = &JfrogSourceCodeBomGenerator{params: params}
+	}
+
+	params.newScaEngine = newScaEngine
+	return params
 }
 
 func (params *AuditParams) SetMultiScanId(msi string) *AuditParams {

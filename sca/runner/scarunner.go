@@ -118,16 +118,20 @@ func shouldRunScan(params ScaScanParams, threadId int) (bool, error) {
 
 func scaScanTask(threadId int, targetResult *results.TargetResults, strategy SbomScanStrategy, outputDir string) error {
 	log.Info(clientUtils.GetLogMsgPrefix(threadId, false)+"Running SCA scan for", targetResult.Target)
+
 	// SCA Scan the target.
 	scanResults, err := strategy.Parallel(threadId).ScaScanTask(targetResult.Sbom)
+
 	// We add the results before checking for errors, so we can display the results even if an error occurred.
 	targetResult.NewScaScanResults(GetScaScansStatusCode(err, scanResults), scanResults).IsMultipleRootProject = clientUtils.Pointer(cdx.IsMultiProject(targetResult.Sbom))
 	if err != nil {
 		return err
 	}
+
 	if targetResult.Technology == "" {
 		targetResult.Technology = techutils.Technology(scanResults.ScannedPackageType)
 	}
+
 	return dumpScanResponseToFileIfNeeded(scanResults, outputDir, utils.ScaScan)
 }
 

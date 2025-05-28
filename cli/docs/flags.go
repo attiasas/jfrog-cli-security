@@ -118,6 +118,7 @@ const (
 	SecretValidation    = "validate-secrets"
 
 	// Unique audit flags
+	NewSca                       = "new-sca"
 	auditPrefix                  = "audit-"
 	ExclusionsAudit              = auditPrefix + Exclusions
 	useWrapperAudit              = auditPrefix + UseWrapper
@@ -167,7 +168,7 @@ var commandFlags = map[string][]string{
 		useWrapperAudit, DepType, RequirementsFile, Fail, ExtendedTable, WorkingDirs, ExclusionsAudit, Mvn, Gradle, Npm,
 		Pnpm, Yarn, Go, Swift, Cocoapods, Nuget, Pip, Pipenv, Poetry, MinSeverity, FixableOnly, ThirdPartyContextualAnalysis, Threads,
 		Sca, Iac, Sast, Secrets, WithoutCA, ScanVuln, SecretValidation, OutputDir, SkipAutoInstall, AllowPartialResults, MaxTreeDepth,
-		Sbom,
+		Sbom, NewSca,
 	},
 	GitAudit: {
 		// Connection params
@@ -239,6 +240,7 @@ var flagsMap = map[string]components.Flag{
 	ScanRepoPath:  components.NewStringFlag(RepoPath, "Artifactory repository path, to enable Xray to determine violations accordingly. The command accepts this option only if the --project and --watches options are not provided. If none of the three options are provided, the command will show all known vulnerabilities."),
 	Licenses:      components.NewBoolFlag(Licenses, "Set if you'd also like the list of licenses to be displayed."),
 	Sbom:          components.NewBoolFlag(Sbom, fmt.Sprintf("For displaying the SBOM for this project, set to true. Relevant only with --%s flag. Ignored if provided 'format' is not 'table'.", Sca)),
+	NewSca:        components.NewBoolFlag(NewSca, "[BETA] Use new SCA engine to run the SCA scan."),
 	OutputFormat: components.NewStringFlag(
 		OutputFormat,
 		"Defines the output format of the command. Acceptable values are: table, json, simple-json and sarif. Note: the json format doesn't include information about scans that are included as part of the Advanced Security package.",

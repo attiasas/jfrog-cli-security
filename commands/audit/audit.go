@@ -177,6 +177,7 @@ func (auditCmd *AuditCommand) Run() (err error) {
 		SetMinSeverityFilter(auditCmd.minSeverityFilter).
 		SetFixableOnly(auditCmd.fixableOnly).
 		SetGraphBasicParams(auditCmd.AuditBasicParams).
+		SetNewScaEngine(auditCmd.newScaEngine).
 		SetResultsContext(CreateAuditResultsContext(
 			serverDetails,
 			auditCmd.GetXrayVersion(),

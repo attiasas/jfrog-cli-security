@@ -433,6 +433,11 @@ func CreateAuditCmd(c *components.Context) (string, string, *coreConfig.ServerDe
 	if err != nil {
 		return "", "", nil, nil, err
 	}
+
+	if c.GetBoolFlagValue(flags.NewSca) {
+		auditCmd.SetNewScaEngine(true)
+	}
+
 	auditCmd.SetTargetRepoPath(addTrailingSlashToRepoPathIfNeeded(c)).
 		SetProject(getProject(c)).
 		SetIncludeVulnerabilities(c.GetBoolFlagValue(flags.Vuln)).
