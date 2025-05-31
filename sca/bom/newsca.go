@@ -30,9 +30,7 @@ func (jbg *JfrogNewBomGenerator) GenerateSbom(target results.ScanTarget) (*cyclo
 		Version: "0.0.8",                // Match version
 	}
 
-	fmt.Println("Talz - about to scan - ", target.Target)
 	bom, err := scanner.Scan(target.Target, scanConfig) // Updated to use new alias
-	fmt.Println("Talz - finished scan - ", target.Target)
 	if err != nil {
 		return nil, fmt.Errorf("failed to scan target %s: %w", target.Target, err)
 	}

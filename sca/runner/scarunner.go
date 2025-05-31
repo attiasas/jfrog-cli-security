@@ -23,6 +23,8 @@ import (
 
 // SbomScanStrategy is an interface for scanning SBOMs using different strategies.
 type SbomScanStrategy interface {
+	// Set ServerDetails sets the server details for the scan strategy.
+	SetServerDetails(serverDetails *config.ServerDetails) SbomScanStrategy
 	// Parallel creates new instance of Scanner for parallel execution.
 	Parallel(threadId int) SbomScanStrategy
 	// ScaScanTask scans the given SBOM using the specified technology.

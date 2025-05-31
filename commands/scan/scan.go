@@ -461,9 +461,9 @@ func (scanCmd *ScanCommand) RunBinaryScaScan(fileTarget string, cmdResults *resu
 		ScanResults:   targetResults,
 	}}
 	strategy := scanCmd.scanStrategy
+	strategy.SetServerDetails(scanCmd.serverDetails)
 	if scanGraphStrategy, ok := strategy.(*scaScanGraph.JfrogScanGraphStrategy); ok {
 		strategy = scanGraphStrategy.WithParams(scanGraphStrategy.
-			SetServerDetails(scanCmd.serverDetails).
 			SetFixableOnly(scanCmd.fixableOnly).
 			SetSeverityLevel(scanCmd.minSeverityFilter.String()).
 			SetXrayGraphScanParams(&services.XrayGraphScanParams{

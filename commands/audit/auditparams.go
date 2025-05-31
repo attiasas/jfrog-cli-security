@@ -6,6 +6,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/sca/bom"
 	bomgen "github.com/jfrog/jfrog-cli-security/sca/bom"
 	scaRunner "github.com/jfrog/jfrog-cli-security/sca/runner"
+	catalog "github.com/jfrog/jfrog-cli-security/sca/runner/catalog"
 	jfrogScanGraph "github.com/jfrog/jfrog-cli-security/sca/runner/scangraph"
 	xrayutils "github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
@@ -74,8 +75,10 @@ func (params *AuditParams) WorkingDirs() []string {
 func (params *AuditParams) SetNewScaEngine(newScaEngine bool) *AuditParams {
 	if newScaEngine {
 		params.bomGenerator = &bomgen.JfrogNewBomGenerator{}
+		params.scanStrategy = &catalog.JfrogCatalogEnricherStrategy{}
 	} else {
 		params.bomGenerator = &JfrogSourceCodeBomGenerator{params: params}
+		params.scanStrategy = &jfrogScanGraph.JfrogScanGraphStrategy{}
 	}
 
 	params.newScaEngine = newScaEngine

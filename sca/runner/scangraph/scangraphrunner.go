@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/CycloneDX/cyclonedx-go"
+	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-security/sca/runner"
 	"github.com/jfrog/jfrog-cli-security/utils/formats/cdx"
 
@@ -29,6 +30,11 @@ func copy(sgs *JfrogScanGraphStrategy) *JfrogScanGraphStrategy {
 		ScanGraphParams: sgs.ScanGraphParams,
 		threadId:        sgs.threadId,
 	}
+}
+
+func (sgs *JfrogScanGraphStrategy) SetServerDetails(serverDetails *config.ServerDetails) runner.SbomScanStrategy {
+	sgs.ScanGraphParams.SetServerDetails(serverDetails)
+	return sgs
 }
 
 // We create a new instance of JfrogScanGraphStrategy with the same parameters as the original instance.

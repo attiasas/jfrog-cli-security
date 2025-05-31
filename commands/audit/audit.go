@@ -386,6 +386,7 @@ func RunScaScans(auditParallelRunner *utils.SecurityParallelRunner, auditParams 
 	// Scan targets
 	for _, targetResult := range scanResults.Targets {
 		strategy := auditParams.ScanStrategy()
+		strategy.SetServerDetails(serverDetails)
 		if jfrogStrategy, ok := strategy.(*jfrogScanGraph.JfrogScanGraphStrategy); ok {
 			// Prepare the specific scan strategy
 			strategy = jfrogStrategy.WithParams(createXrayScanGraphParams(serverDetails, targetResult, auditParams))
