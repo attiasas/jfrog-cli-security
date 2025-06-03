@@ -6,6 +6,8 @@ import (
 	"os"
 	"strings"
 
+	"github.com/urfave/cli"
+
 	buildInfoUtils "github.com/jfrog/build-info-go/utils"
 	"github.com/jfrog/gofrog/datastructures"
 	"github.com/jfrog/jfrog-cli-core/v2/common/cliutils"
@@ -17,16 +19,12 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/plugins/components"
 	coreConfig "github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
-	enrichDocs "github.com/jfrog/jfrog-cli-security/cli/docs/enrich"
-	"github.com/jfrog/jfrog-cli-security/commands/enrich"
-	"github.com/jfrog/jfrog-cli-security/commands/upload"
-	"github.com/jfrog/jfrog-cli-security/utils/xray"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
-	"github.com/urfave/cli"
 
 	flags "github.com/jfrog/jfrog-cli-security/cli/docs"
 	auditSpecificDocs "github.com/jfrog/jfrog-cli-security/cli/docs/auditspecific"
+	enrichDocs "github.com/jfrog/jfrog-cli-security/cli/docs/enrich"
 	auditDocs "github.com/jfrog/jfrog-cli-security/cli/docs/scan/audit"
 	buildScanDocs "github.com/jfrog/jfrog-cli-security/cli/docs/scan/buildscan"
 	curationDocs "github.com/jfrog/jfrog-cli-security/cli/docs/scan/curation"
@@ -36,9 +34,19 @@ import (
 
 	"github.com/jfrog/jfrog-cli-security/commands/audit"
 	"github.com/jfrog/jfrog-cli-security/commands/curation"
+	"github.com/jfrog/jfrog-cli-security/commands/enrich"
 	"github.com/jfrog/jfrog-cli-security/commands/scan"
+	"github.com/jfrog/jfrog-cli-security/commands/upload"
+
+	"github.com/jfrog/jfrog-cli-security/sca/bom"
+	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo"
+
+	"github.com/jfrog/jfrog-cli-security/sca/runner"
+	jfrogScanGraph "github.com/jfrog/jfrog-cli-security/sca/runner/scangraph"
+
 	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
+	"github.com/jfrog/jfrog-cli-security/utils/xray"
 	"github.com/jfrog/jfrog-cli-security/utils/xsc"
 )
 
@@ -396,6 +404,18 @@ func AuditCmd(c *components.Context) error {
 		auditCmd.SetScansToPerform(subScans)
 	}
 
+	// Set dynamic command logic based on flags
+	if bomGenerator, err := getBomGenerator(c); err != nil {
+		return err
+	} else {
+		auditCmd.SetBomGenerator(bomGenerator)
+	}
+	if scaScanStrategy, err := getScaScanStrategy(c); err != nil {
+		return err
+	} else {
+		auditCmd.SetScaScanStrategy(scaScanStrategy)
+	}
+
 	threads, err := pluginsCommon.GetThreadsCount(c)
 	if err != nil {
 		return err
@@ -403,6 +423,22 @@ func AuditCmd(c *components.Context) error {
 	auditCmd.SetThreads(threads)
 	// Reporting error if Xsc service is enabled
 	return reportErrorIfExists(xrayVersion, xscVersion, serverDetails, progressbar.ExecWithProgress(auditCmd))
+}
+
+func getBomGenerator(c *components.Context) (bom.SbomGenerator, error) {
+	switch strings.ToLower(c.GetStringFlagValue(flags.BomGenerator)) {
+	case "buildinfo":
+		return &audit.JfrogSourceCodeBomGenerator{}, nil
+		// return &buildinfo.BuildInfoBomGenerator{}, nil
+	// case "scang":
+	// 	return &buildinfo.JfrogBomGenerator{}, nil
+	default:
+		return nil, fmt.Errorf("unknown BOM generator: %s", c.GetStringFlagValue(flags.BomGenerator))
+	}
+}
+
+func getScaScanStrategy(c *components.Context) (runner.SbomScanStrategy, error) {
+	return &jfrogScanGraph.JfrogScanGraphStrategy{}, nil
 }
 
 func CreateAuditCmd(c *components.Context) (string, string, *coreConfig.ServerDetails, *audit.AuditCommand, error) {
@@ -486,6 +522,8 @@ func AuditSpecificCmd(c *components.Context, technology techutils.Technology) er
 	if err != nil {
 		return err
 	}
+	auditCmd.SetBomGenerator(&buildinfo.BuildInfoBomGenerator{})
+	auditCmd.SetScaScanStrategy(&jfrogScanGraph.JfrogScanGraphStrategy{})
 	technologies := []string{string(technology)}
 	auditCmd.SetTechnologies(technologies)
 	// Reporting error if Xsc service is enabled

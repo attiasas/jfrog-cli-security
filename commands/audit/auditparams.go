@@ -6,7 +6,6 @@ import (
 	"github.com/jfrog/jfrog-cli-security/sca/bom"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo"
 	scaRunner "github.com/jfrog/jfrog-cli-security/sca/runner"
-	jfrogScanGraph "github.com/jfrog/jfrog-cli-security/sca/runner/scangraph"
 	xrayutils "github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
@@ -41,8 +40,6 @@ func NewAuditParams() *AuditParams {
 	params := &AuditParams{
 		AuditBasicParams: &xrayutils.AuditBasicParams{},
 	}
-	params.scanStrategy = &jfrogScanGraph.JfrogScanGraphStrategy{}
-	params.bomGenerator = &JfrogSourceCodeBomGenerator{params: params}
 	return params
 }
 
@@ -63,6 +60,16 @@ func (params *AuditParams) ToBuildInfoParams() (bomParams buildinfo.BuildInfoBom
 		UseWrapper:              params.AuditBasicParams.UseWrapper(),
 	}
 	return
+}
+
+func (params *AuditParams) SetScaScanStrategy(scanStrategy scaRunner.SbomScanStrategy) *AuditParams {
+	params.scanStrategy = scanStrategy
+	return params
+}
+
+func (params *AuditParams) SetBomGenerator(bomGenerator bom.SbomGenerator) *AuditParams {
+	params.bomGenerator = bomGenerator
+	return params
 }
 
 func (params *AuditParams) ScanStrategy() scaRunner.SbomScanStrategy {

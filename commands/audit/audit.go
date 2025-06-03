@@ -173,6 +173,8 @@ func (auditCmd *AuditCommand) Run() (err error) {
 	)
 
 	auditParams := NewAuditParams().
+		SetBomGenerator(auditCmd.bomGenerator).
+		SetScaScanStrategy(auditCmd.scanStrategy).
 		SetWorkingDirs(workingDirs).
 		SetMinSeverityFilter(auditCmd.minSeverityFilter).
 		SetFixableOnly(auditCmd.fixableOnly).
@@ -212,16 +214,12 @@ func RunAudit(auditParams *AuditParams) (cmdResults *results.SecurityCommandResu
 	if auditParams.Progress() != nil {
 		auditParams.Progress().SetHeadlineMsg("Preparing to scan")
 	}
-	// Initialize Results struct
-	if cmdResults = initAuditCmdResults(auditParams); cmdResults.GeneralError != nil {
-		return
-	}
-	// Populate the scan targets
-	if populateScanTargets(cmdResults, auditParams); cmdResults.GeneralError != nil {
-		return
-	}
-	// Initialize the parallel runner
+	// Prepare the command for the scan.
 	auditParallelRunner := utils.CreateSecurityParallelRunner(auditParams.threads)
+	if cmdResults = prepareForScan(auditParams); cmdResults.GeneralError != nil {
+		return
+	}
+
 	if auditParams.Progress() != nil {
 		auditParams.Progress().SetHeadlineMsg("Scanning for issues")
 	}
@@ -246,6 +244,24 @@ func RunAudit(auditParams *AuditParams) (cmdResults *results.SecurityCommandResu
 		auditParallelRunner.Runner.Done()
 	}()
 	auditParallelRunner.Runner.Run()
+	return
+}
+
+func prepareForScan(params *AuditParams) (cmdResults *results.SecurityCommandResults) {
+	
+	if buildInfoGenerator := params.bomGenerator.(*JfrogSourceCodeBomGenerator); buildInfoGenerator != nil {
+		// If the bomGenerator is a JfrogSourceCodeBomGenerator, set the params to it.
+		buildInfoGenerator.Params = params
+	}
+	
+	// Initialize Results struct
+	if cmdResults = initAuditCmdResults(params); cmdResults.GeneralError != nil {
+		return
+	}
+	// Populate the scan targets
+	if populateScanTargets(cmdResults, params); cmdResults.GeneralError != nil {
+		return
+	}
 	return
 }
 

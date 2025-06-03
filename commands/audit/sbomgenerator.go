@@ -39,7 +39,7 @@ import (
 )
 
 type JfrogSourceCodeBomGenerator struct {
-	params *AuditParams
+	Params *AuditParams
 }
 
 func (jbg *JfrogSourceCodeBomGenerator) Parallel(threadId int) bom.SbomGenerator {
@@ -66,7 +66,7 @@ func (jbg *JfrogSourceCodeBomGenerator) GenerateSbom(target results.ScanTarget) 
 		return
 	}
 	log.Debug(fmt.Sprintf("Generating '%s' dependency tree...", target.Target))
-	treeResult, bdtErr := buildDependencyTree(target, jbg.params)
+	treeResult, bdtErr := buildDependencyTree(target, jbg.Params)
 	if bdtErr != nil {
 		var projectNotInstalledErr *biUtils.ErrProjectNotInstalled
 		if errors.As(bdtErr, &projectNotInstalledErr) {
