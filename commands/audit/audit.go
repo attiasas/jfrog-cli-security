@@ -265,7 +265,7 @@ func initAuditCmdResults(params *AuditParams) (cmdResults *results.SecurityComma
 	if err = clientutils.ValidateMinimumVersion(clientutils.Xray, params.GetXrayVersion(), scangraph.GraphScanMinXrayVersion); err != nil {
 		return cmdResults.AddGeneralError(err, false)
 	}
-	xrayManager, err := xrayutils.CreateXrayServiceManager(serverDetails)
+	xrayManager, err := xrayutils.CreateXrayServiceManager(serverDetails, xrayutils.WithScopedProjectKey(params.resultsContext.ProjectKey))
 	if err != nil {
 		return cmdResults.AddGeneralError(err, false)
 	}
@@ -322,7 +322,7 @@ func populateScanTargets(cmdResults *results.SecurityCommandResults, params *Aud
 		if params.scanResultsOutputDir == "" {
 			continue
 		}
-		if err = utils.DumpCdxContentToFile(sbom, params.scanResultsOutputDir); err != nil {
+		if err = utils.DumpCdxContentToFile(sbom, params.scanResultsOutputDir, "bom"); err != nil {
 			log.Warn(fmt.Sprintf("Failed to dump CycloneDX SBOM for %s: %s", targetResult.Target, err.Error()))
 		}
 	}
@@ -523,6 +523,7 @@ func (auditCmd *AuditCommand) getResultWriter(cmdResults *results.SecurityComman
 	}
 	return output.NewResultsWriter(cmdResults).
 		SetOutputFormat(auditCmd.OutputFormat()).
+		SetOutputDir(auditCmd.scanResultsOutputDir).
 		SetPrintExtendedTable(auditCmd.PrintExtendedTable).
 		SetExtraMessages(messages).
 		SetSubScansPerformed(auditCmd.ScansToPerform())

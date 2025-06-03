@@ -120,7 +120,7 @@ func (sgs *JfrogScanGraphStrategy) RunXrayBinaryTreeScanGraph(target *cyclonedx.
 	fullCompTree := cdx.BomToFullCompTree(target)
 	params.XrayGraphScanParams().BinaryGraph = fullCompTree
 	// Scan
-	xrayManager, err := xray.CreateXrayServiceManager(params.ServerDetails())
+	xrayManager, err := xray.CreateXrayServiceManager(params.ServerDetails(), xray.WithScopedProjectKey(params.XrayGraphScanParams().ProjectKey))
 	if err != nil {
 		return
 	}
@@ -150,7 +150,7 @@ func (sgs *JfrogScanGraphStrategy) RunXrayDependenciesTreeScanGraph(target *cycl
 	params.XrayGraphScanParams().Technology = technology.String()
 	params.SetTechnology(technology)
 	// Create Xray service manager
-	xrayManager, err := xray.CreateXrayServiceManager(params.ServerDetails())
+	xrayManager, err := xray.CreateXrayServiceManager(params.ServerDetails(), xray.WithScopedProjectKey(params.XrayGraphScanParams().ProjectKey))
 	if err != nil {
 		err = errorutils.CheckErrorf("failed to create Xray service manager: %w", err)
 		return
