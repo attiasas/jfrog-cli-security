@@ -39,6 +39,7 @@ type AuditParams interface {
 	SetIgnoreConfigFile(ignoreConfigFile bool) *AuditBasicParams
 	IsMavenDepTreeInstalled() bool
 	SetIsMavenDepTreeInstalled(isMavenDepTreeInstalled bool) *AuditBasicParams
+	SetIsGradleDepTreeInstalled(isGradleDepTreeInstalled bool) *AuditBasicParams
 	IsCurationCmd() bool
 	SetIsCurationCmd(bool) *AuditBasicParams
 	SetExclusions(exclusions []string) *AuditBasicParams
@@ -52,24 +53,25 @@ type AuditParams interface {
 }
 
 type AuditBasicParams struct {
-	serverDetails           *config.ServerDetails
-	outputFormat            format.OutputFormat
-	progress                ioUtils.ProgressMgr
-	useJas                  bool
-	excludeTestDependencies bool
-	useWrapper              bool
-	insecureTls             bool
-	ignoreConfigFile        bool
-	isMavenDepTreeInstalled bool
-	isCurationCmd           bool
-	maxTreeDepth            string
-	pipRequirementsFile     string
-	depsRepo                string
-	installCommandName      string
-	technologies            []string
-	scansToPerform          []SubScanType
-	args                    []string
-	installCommandArgs      []string
+	serverDetails            *config.ServerDetails
+	outputFormat             format.OutputFormat
+	progress                 ioUtils.ProgressMgr
+	useJas                   bool
+	excludeTestDependencies  bool
+	useWrapper               bool
+	insecureTls              bool
+	ignoreConfigFile         bool
+	isMavenDepTreeInstalled  bool
+	isGradleDepTreeInstalled bool
+	isCurationCmd            bool
+	maxTreeDepth             string
+	pipRequirementsFile      string
+	depsRepo                 string
+	installCommandName       string
+	technologies             []string
+	scansToPerform           []SubScanType
+	args                     []string
+	installCommandArgs       []string
 	// dependenciesForApplicabilityScan *datastructures.Set[string]
 	exclusions          []string
 	isRecursiveScan     bool
@@ -265,6 +267,13 @@ func (abp *AuditBasicParams) IsMavenDepTreeInstalled() bool {
 
 func (abp *AuditBasicParams) SetIsMavenDepTreeInstalled(isMavenDepTreeInstalled bool) *AuditBasicParams {
 	abp.isMavenDepTreeInstalled = isMavenDepTreeInstalled
+	return abp
+}
+func (abp *AuditBasicParams) IsGradleDepTreeInstalled() bool {
+	return abp.isGradleDepTreeInstalled
+}
+func (abp *AuditBasicParams) SetIsGradleDepTreeInstalled(isGradleDepTreeInstalled bool) *AuditBasicParams {
+	abp.isGradleDepTreeInstalled = isGradleDepTreeInstalled
 	return abp
 }
 

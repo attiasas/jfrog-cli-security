@@ -701,7 +701,7 @@ func GetAllTechnologiesList() (technologies []Technology) {
 	return
 }
 
-// SplitComponentId splits a Xray component ID to the component name, version and package type.
+// SplitComponentIdRaw splits a Xray component ID to the component name, version and package type.
 // In case componentId doesn't contain a version, the returned version will be an empty string.
 // In case componentId's format is invalid, it will be returned as the component name
 // and empty strings will be returned instead of the version and the package type.
@@ -710,12 +710,12 @@ func GetAllTechnologiesList() (technologies []Technology) {
 //     Returned values:
 //     Component name: "antparent:ant"
 //     Component version: "1.6.5"
-//     Package type: "Maven"
+//     Package type: "gav"
 //  2. componentId: "generic://sha256:244fd47e07d1004f0aed9c156aa09083c82bf8944eceb67c946ff7430510a77b/foo.jar"
 //     Returned values:
 //     Component name: "foo.jar"
 //     Component version: ""
-//     Package type: "Generic"
+//     Package type: "generic"
 //  3. componentId: "invalid-comp-id"
 //     Returned values:
 //     Component name: "invalid-comp-id"

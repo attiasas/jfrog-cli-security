@@ -76,8 +76,9 @@ type TargetResults struct {
 	Sbom               *cyclonedx.BOM `json:"sbom,omitempty"`
 	DirectDependencies []string       `json:"direct_dependencies,omitempty"`
 	// All scan results for the target
-	ScaResults *ScaScanResults  `json:"sca_scans,omitempty"`
-	JasResults *JasScansResults `json:"jas_scans,omitempty"`
+	ScaResults         *ScaScanResults             `json:"sca_scans,omitempty"`
+	JasResults         *JasScansResults            `json:"jas_scans,omitempty"`
+	JasPackageScanType jasutils.JasPackageScanType `json:"jas_package_scan_type,omitempty"`
 	// Errors that occurred during the scans
 	Errors      []error    `json:"errors,omitempty"`
 	errorsMutex sync.Mutex `json:"-"`
@@ -222,6 +223,19 @@ func (r *SecurityCommandResults) GetTargets() (targets []ScanTarget) {
 		targets = append(targets, scan.ScanTarget)
 	}
 	return
+}
+
+func (r *SecurityCommandResults) GetTargetResults(target string) *TargetResults {
+	for _, scan := range r.Targets {
+		if scan.Target == target {
+			return scan
+		}
+	}
+	return nil
+}
+
+func (r *SecurityCommandResults) GetCommonParentPath() string {
+	return utils.GetCommonParentDir(r.GetTargetsPaths()...)
 }
 
 func (r *SecurityCommandResults) GetScaScansXrayResults() (results []services.ScanResponse) {

@@ -566,7 +566,7 @@ func ShouldRunCurationAfterFailure(c *components.Context, tech techutils.Technol
 	if err != nil {
 		return
 	}
-	xrayManager, err := xray.CreateXrayServiceManager(serverDetails)
+	xrayManager, err := xray.CreateXrayServiceManager(serverDetails, xray.WithScopedProjectKey(getProject(c)))
 	if err != nil {
 		return
 	}
