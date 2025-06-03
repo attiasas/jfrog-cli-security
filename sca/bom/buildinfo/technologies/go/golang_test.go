@@ -23,7 +23,7 @@ import (
 
 func TestBuildGoDependencyList(t *testing.T) {
 	// Create and change directory to test workspace
-	_, cleanUp := buildinfo.CreateTestWorkspace(t, filepath.Join("projects", "package-managers", "go", "go-project"))
+	_, cleanUp := technologies.CreateTestWorkspace(t, filepath.Join("projects", "package-managers", "go", "go-project"))
 	defer cleanUp()
 
 	err := removeTxtSuffix("go.mod.txt")
@@ -92,7 +92,7 @@ func Test_handleCurationGoError(t *testing.T) {
 		{
 			name:          "curation error 403",
 			err:           errors.New("package download failed due to 403 forbidden test failure"),
-			expectedError: fmt.Errorf(buildinfo.CurationErrorMsgToUserTemplate, techutils.Go),
+			expectedError: fmt.Errorf(technologies.CurationErrorMsgToUserTemplate, techutils.Go),
 		},
 		{
 			name: "not curation error 500",

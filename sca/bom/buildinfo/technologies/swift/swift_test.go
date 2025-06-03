@@ -20,7 +20,7 @@ import (
 
 func TestBuildSwiftDependencyList(t *testing.T) {
 	// Create and change directory to test workspace
-	_, cleanUp := buildinfo.CreateTestWorkspace(t, filepath.Join("projects", "package-managers", "swift"))
+	_, cleanUp := technologies.CreateTestWorkspace(t, filepath.Join("projects", "package-managers", "swift"))
 	defer cleanUp()
 	// Run getModulesDependencyTrees
 	server := &config.ServerDetails{
@@ -63,7 +63,7 @@ func TestBuildSwiftDependencyList(t *testing.T) {
 }
 
 func TestGetTechDependencyLocation(t *testing.T) {
-	_, cleanUp := buildinfo.CreateTestWorkspace(t, filepath.Join("projects", "package-managers", "swift"))
+	_, cleanUp := technologies.CreateTestWorkspace(t, filepath.Join("projects", "package-managers", "swift"))
 	defer cleanUp()
 	currentDir, err := coreutils.GetWorkingDirectory()
 	assert.NoError(t, err)
@@ -108,7 +108,7 @@ func TestFixTechDependencySingleLocation_Range(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.testName, func(t *testing.T) {
-			_, cleanUp := buildinfo.CreateTestWorkspace(t, filepath.Join("projects", "package-managers", "swift"))
+			_, cleanUp := technologies.CreateTestWorkspace(t, filepath.Join("projects", "package-managers", "swift"))
 			defer cleanUp()
 			currentDir, err := coreutils.GetWorkingDirectory()
 			assert.NoError(t, err)

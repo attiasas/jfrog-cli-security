@@ -47,7 +47,7 @@ func BuildDependencyTree(params utils.AuditParams) (dependencyTree []*xrayUtils.
 	if err != nil {
 		return
 	}
-	exclusionPattern := buildinfo.GetExcludePattern(params)
+	exclusionPattern := technologies.GetExcludePattern(params)
 	sol, err := solution.Load(wd, "", exclusionPattern, log.Logger)
 	if err != nil && !strings.Contains(err.Error(), globalPackagesNotFoundErrorMessage) {
 		// In older NuGet projects that utilize NuGet Cli and package.config, if the project is not installed, the solution.Load function raises an error because it cannot find global package paths.
@@ -86,7 +86,7 @@ func restoreInTempDirAndGetBuildInfo(params utils.AuditParams, wd string, exclus
 	}()
 
 	// Exclude Visual Studio inner directory since it is not necessary for the scan process and may cause race condition.
-	err = biutils.CopyDir(wd, tmpWd, true, []string{buildinfo.DotVsRepoSuffix})
+	err = biutils.CopyDir(wd, tmpWd, true, []string{technologies.DotVsRepoSuffix})
 	if err != nil {
 		err = fmt.Errorf("failed copying project to temp dir: %w", err)
 		return

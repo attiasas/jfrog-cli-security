@@ -21,7 +21,7 @@ import (
 
 func TestParseNpmDependenciesList(t *testing.T) {
 	// Create and change directory to test workspace
-	_, cleanUp := buildinfo.CreateTestWorkspace(t, filepath.Join("other", "npm"))
+	_, cleanUp := technologies.CreateTestWorkspace(t, filepath.Join("other", "npm"))
 	defer cleanUp()
 	dependenciesJson, err := os.ReadFile("dependencies.json")
 	assert.NoError(t, err)
@@ -116,7 +116,7 @@ func TestParseNpmDependenciesList(t *testing.T) {
 
 func TestIgnoreScripts(t *testing.T) {
 	// Create and change directory to test workspace
-	_, cleanUp := buildinfo.CreateTestWorkspace(t, filepath.Join("projects", "package-managers", "npm", "npm-scripts"))
+	_, cleanUp := technologies.CreateTestWorkspace(t, filepath.Join("projects", "package-managers", "npm", "npm-scripts"))
 	defer cleanUp()
 
 	// The package.json file contain a postinstall script running an "exit 1" command.
@@ -158,7 +158,7 @@ func TestSkipBuildDepTreeWhenInstallForbidden(t *testing.T) {
 
 	for _, test := range testCases {
 		t.Run(test.name, func(t *testing.T) {
-			dirPath, cleanUp := buildinfo.CreateTestWorkspace(t, test.testDir)
+			dirPath, cleanUp := technologies.CreateTestWorkspace(t, test.testDir)
 			defer cleanUp()
 
 			exists, err := fileutils.IsFileExists(filepath.Join(dirPath, "package-lock.json"), false)

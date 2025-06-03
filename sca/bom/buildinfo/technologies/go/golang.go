@@ -105,7 +105,7 @@ func handleCurationGoError(err error) (bool, error) {
 	if err == nil {
 		return false, nil
 	}
-	if msgToUser := buildinfo.GetMsgToUserForCurationBlock(true, techutils.Go, err.Error()); msgToUser != "" {
+	if msgToUser := technologies.GetMsgToUserForCurationBlock(true, techutils.Go, err.Error()); msgToUser != "" {
 		return true, errors.New(msgToUser)
 	}
 	return false, nil

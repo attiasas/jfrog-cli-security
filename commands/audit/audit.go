@@ -13,6 +13,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/jas/applicability"
 	"github.com/jfrog/jfrog-cli-security/jas/runner"
 	"github.com/jfrog/jfrog-cli-security/jas/secrets"
+	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies"
 	jfrogScanGraph "github.com/jfrog/jfrog-cli-security/sca/runner/scangraph"
 	"github.com/jfrog/jfrog-cli-security/utils"
@@ -248,12 +249,6 @@ func RunAudit(auditParams *AuditParams) (cmdResults *results.SecurityCommandResu
 }
 
 func prepareForScan(params *AuditParams) (cmdResults *results.SecurityCommandResults) {
-	
-	if buildInfoGenerator := params.bomGenerator.(*JfrogSourceCodeBomGenerator); buildInfoGenerator != nil {
-		// If the bomGenerator is a JfrogSourceCodeBomGenerator, set the params to it.
-		buildInfoGenerator.Params = params
-	}
-	
 	// Initialize Results struct
 	if cmdResults = initAuditCmdResults(params); cmdResults.GeneralError != nil {
 		return
@@ -273,11 +268,26 @@ func initAuditCmdResults(params *AuditParams) (cmdResults *results.SecurityComma
 	cmdResults.SetStartTime(params.StartTime())
 	cmdResults.SetMultiScanId(params.GetMultiScanId())
 	cmdResults.SetResultsContext(params.resultsContext)
+
 	// Send requests to the platform to verify information
 	serverDetails, err := params.ServerDetails()
 	if err != nil {
 		return cmdResults.AddGeneralError(err, false)
 	}
+
+	if buildInfoGenerator, success := params.bomGenerator.(*JfrogSourceCodeBomGenerator); success && buildInfoGenerator != nil {
+		// If the bomGenerator is a JfrogSourceCodeBomGenerator, set the params to it.
+		buildInfoGenerator.Params = params
+	}
+	if buildInfoGenerator, success := params.bomGenerator.(*buildinfo.BuildInfoBomGenerator); success && buildInfoGenerator != nil {
+		// If the bomGenerator is a BuildInfoBomGenerator, convert the params to build info params.
+		if buildParams, err := params.ToBuildInfoParams(); err != nil {
+			return results.NewCommandResults(utils.SourceCode).AddGeneralError(fmt.Errorf("failed to create build info params: %s", err.Error()), false)
+		} else {
+			buildInfoGenerator.Params = buildParams
+		}
+	}
+
 	if err = clientutils.ValidateMinimumVersion(clientutils.Xray, params.GetXrayVersion(), scangraph.GraphScanMinXrayVersion); err != nil {
 		return cmdResults.AddGeneralError(err, false)
 	}
@@ -357,7 +367,7 @@ func detectScanTargets(cmdResults *results.SecurityCommandResults, params *Audit
 			continue
 		}
 		// Detect descriptors and technologies in the requested directory.
-		techToWorkingDirs, err := techutils.DetectTechnologiesDescriptors(requestedDirectory, params.IsRecursiveScan(), params.Technologies(), getRequestedDescriptors(params), buildinfo.GetExcludePattern(params.AuditBasicParams))
+		techToWorkingDirs, err := techutils.DetectTechnologiesDescriptors(requestedDirectory, params.IsRecursiveScan(), params.Technologies(), getRequestedDescriptors(params), technologies.GetExcludePattern(params.AuditBasicParams))
 		if err != nil {
 			log.Warn("Couldn't detect technologies in", requestedDirectory, "directory.", err.Error())
 			continue
