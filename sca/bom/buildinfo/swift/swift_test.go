@@ -11,7 +11,7 @@ import (
 	"testing"
 
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
-	"github.com/jfrog/jfrog-cli-security/commands/audit/sca"
+	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo"
 	xrayutils "github.com/jfrog/jfrog-cli-security/utils"
 
 	"github.com/stretchr/testify/assert"

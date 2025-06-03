@@ -8,7 +8,7 @@ import (
 	goartifactoryutils "github.com/jfrog/jfrog-cli-artifactory/artifactory/commands/golang"
 	goutils "github.com/jfrog/jfrog-cli-artifactory/artifactory/commands/golang"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
-	"github.com/jfrog/jfrog-cli-security/commands/audit/sca"
+	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
