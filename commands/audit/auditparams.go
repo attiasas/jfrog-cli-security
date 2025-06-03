@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/jfrog/jfrog-cli-security/sca/bom"
+	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo"
 	scaRunner "github.com/jfrog/jfrog-cli-security/sca/runner"
 	jfrogScanGraph "github.com/jfrog/jfrog-cli-security/sca/runner/scangraph"
 	xrayutils "github.com/jfrog/jfrog-cli-security/utils"
@@ -43,6 +44,25 @@ func NewAuditParams() *AuditParams {
 	params.scanStrategy = &jfrogScanGraph.JfrogScanGraphStrategy{}
 	params.bomGenerator = &JfrogSourceCodeBomGenerator{params: params}
 	return params
+}
+
+func (params *AuditParams) ToBuildInfoParams() (bomParams buildinfo.BuildInfoBomParams, err error) {
+	serverDetails, err := params.AuditBasicParams.ServerDetails()
+	if err != nil {
+		return
+	}
+	bomParams = buildinfo.BuildInfoBomParams{
+		// Artifactory repository info
+		ServerDetails:        serverDetails,
+		DependencyRepository: params.AuditBasicParams.DepsRepo(),
+		IgnoreConfigFile:     params.AuditBasicParams.IgnoreConfigFile(),
+		// Curation info
+		IsCurationCmd: params.AuditBasicParams.IsCurationCmd(),
+		// Java params
+		IsMavenDepTreeInstalled: params.AuditBasicParams.IsMavenDepTreeInstalled(),
+		UseWrapper:              params.AuditBasicParams.UseWrapper(),
+	}
+	return
 }
 
 func (params *AuditParams) ScanStrategy() scaRunner.SbomScanStrategy {
