@@ -86,7 +86,7 @@ func getDependencies(params utils.AuditParams, technology techutils.Technology) 
 	}()
 
 	// Exclude Visual Studio inner directory since it is not necessary for the scan process and may cause race condition.
-	err = biutils.CopyDir(wd, tempDirPath, true, []string{sca.DotVsRepoSuffix})
+	err = biutils.CopyDir(wd, tempDirPath, true, []string{buildinfo.DotVsRepoSuffix})
 	if err != nil {
 		return
 	}
@@ -112,8 +112,8 @@ func getDependencies(params utils.AuditParams, technology techutils.Technology) 
 	}
 	dependenciesGraph, directDependencies, err = pythonutils.GetPythonDependencies(pythonTool, tempDirPath, localDependenciesPath, log.GetLogger())
 	if err != nil {
-		sca.LogExecutableVersion("python")
-		sca.LogExecutableVersion(string(pythonTool))
+		buildinfo.LogExecutableVersion("python")
+		buildinfo.LogExecutableVersion(string(pythonTool))
 	}
 	if !params.IsCurationCmd() {
 		return
@@ -285,7 +285,7 @@ func installPipDeps(params utils.AuditParams) (restoreEnv func() error, err erro
 		}
 	}
 	if err != nil || reqErr != nil {
-		if msgToUser := sca.GetMsgToUserForCurationBlock(params.IsCurationCmd(), techutils.Pip, errors.Join(err, reqErr).Error()); msgToUser != "" {
+		if msgToUser := buildinfo.GetMsgToUserForCurationBlock(params.IsCurationCmd(), techutils.Pip, errors.Join(err, reqErr).Error()); msgToUser != "" {
 			err = errors.Join(err, errors.New(msgToUser))
 		}
 	}
@@ -315,7 +315,7 @@ func executeCommand(executable string, args ...string) (string, error) {
 	log.Debug("Running", maskedCmdString)
 	output, err := installCmd.CombinedOutput()
 	if err != nil {
-		sca.LogExecutableVersion(executable)
+		buildinfo.LogExecutableVersion(executable)
 		return string(output), errorutils.CheckErrorf("%q command failed: %s - %s", maskedCmdString, err.Error(), output)
 	}
 	return string(output), nil

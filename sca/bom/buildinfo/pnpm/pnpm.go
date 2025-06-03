@@ -116,7 +116,7 @@ func installProjectIfNeeded(pnpmExecPath, workingDir string) (dirForDependencies
 	}()
 
 	// Exclude Visual Studio inner directory since it is not necessary for the scan process and may cause race condition.
-	err = biutils.CopyDir(workingDir, dirForDependenciesCalculation, true, []string{sca.DotVsRepoSuffix})
+	err = biutils.CopyDir(workingDir, dirForDependenciesCalculation, true, []string{buildinfo.DotVsRepoSuffix})
 	if err != nil {
 		err = fmt.Errorf("failed copying project to temp dir: %w", err)
 		return

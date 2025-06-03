@@ -25,7 +25,7 @@ var expectedResult = &xrayUtils.GraphNode{
 var expectedUniqueDeps = []string{"conan://openssl:3.0.9", "conan://zlib:1.3.1", "conan://meson:1.4.1", "conan://ninja:1.12.1"}
 
 func TestParseConanDependencyTree(t *testing.T) {
-	_, cleanUp := sca.CreateTestWorkspace(t, filepath.Join("other", "conan"))
+	_, cleanUp := buildinfo.CreateTestWorkspace(t, filepath.Join("other", "conan"))
 	defer cleanUp()
 	dependenciesJson, err := os.ReadFile("dependencies.json")
 	assert.NoError(t, err)
@@ -42,7 +42,7 @@ func TestParseConanDependencyTree(t *testing.T) {
 }
 
 func TestBuildDependencyTree(t *testing.T) {
-	dir, cleanUp := sca.CreateTestWorkspace(t, filepath.Join("projects", "package-managers", "conan"))
+	dir, cleanUp := buildinfo.CreateTestWorkspace(t, filepath.Join("projects", "package-managers", "conan"))
 	defer cleanUp()
 	params := &utils.AuditBasicParams{}
 	params.SetConanProfile(filepath.Join(dir, "profile"))

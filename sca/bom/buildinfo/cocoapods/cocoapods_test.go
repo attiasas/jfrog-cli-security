@@ -20,7 +20,7 @@ import (
 
 func TestBuildCocoapodsDependencyList(t *testing.T) {
 	// Create and change directory to test workspace
-	_, cleanUp := sca.CreateTestWorkspace(t, filepath.Join("projects", "package-managers", "cocoapods"))
+	_, cleanUp := buildinfo.CreateTestWorkspace(t, filepath.Join("projects", "package-managers", "cocoapods"))
 	defer cleanUp()
 
 	// Run getModulesDependencyTrees
@@ -60,7 +60,7 @@ func TestBuildCocoapodsDependencyList(t *testing.T) {
 }
 
 func TestGetTechDependencyLocation(t *testing.T) {
-	_, cleanUp := sca.CreateTestWorkspace(t, filepath.Join("projects", "package-managers", "cocoapods"))
+	_, cleanUp := buildinfo.CreateTestWorkspace(t, filepath.Join("projects", "package-managers", "cocoapods"))
 	defer cleanUp()
 	currentDir, err := coreutils.GetWorkingDirectory()
 	assert.NoError(t, err)
@@ -91,7 +91,7 @@ func TestPodLineParseFoundOnlyDependencyName(t *testing.T) {
 }
 
 func TestFixTechDependencySingleLocation(t *testing.T) {
-	_, cleanUp := sca.CreateTestWorkspace(t, filepath.Join("projects", "package-managers", "cocoapods"))
+	_, cleanUp := buildinfo.CreateTestWorkspace(t, filepath.Join("projects", "package-managers", "cocoapods"))
 	defer cleanUp()
 	currentDir, err := coreutils.GetWorkingDirectory()
 	assert.NoError(t, err)
@@ -103,7 +103,7 @@ func TestFixTechDependencySingleLocation(t *testing.T) {
 }
 
 func TestFixTechDependencyMultipleLocations(t *testing.T) {
-	_, cleanUp := sca.CreateTestWorkspace(t, filepath.Join("projects", "package-managers", "cocoapods"))
+	_, cleanUp := buildinfo.CreateTestWorkspace(t, filepath.Join("projects", "package-managers", "cocoapods"))
 	defer cleanUp()
 	currentDir, err := coreutils.GetWorkingDirectory()
 	assert.NoError(t, err)
@@ -116,7 +116,7 @@ func TestFixTechDependencyMultipleLocations(t *testing.T) {
 }
 
 func TestFixTechDependencyNoLocations(t *testing.T) {
-	_, cleanUp := sca.CreateTestWorkspace(t, filepath.Join("projects", "package-managers", "cocoapods"))
+	_, cleanUp := buildinfo.CreateTestWorkspace(t, filepath.Join("projects", "package-managers", "cocoapods"))
 	defer cleanUp()
 	currentDir, err := coreutils.GetWorkingDirectory()
 	assert.NoError(t, err)

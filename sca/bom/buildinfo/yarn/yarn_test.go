@@ -200,7 +200,7 @@ func TestSkipBuildDepTreeWhenInstallForbidden(t *testing.T) {
 	for _, test := range testCases {
 		t.Run(test.name, func(t *testing.T) {
 			// Create and change directory to test workspace
-			dirPath, cleanUp := sca.CreateTestWorkspace(t, test.testDir)
+			dirPath, cleanUp := buildinfo.CreateTestWorkspace(t, test.testDir)
 			defer cleanUp()
 
 			expectedLockFilePath := filepath.Join(dirPath, "yarn.lock")
