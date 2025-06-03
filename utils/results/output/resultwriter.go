@@ -165,7 +165,10 @@ func (rw *ResultsWriter) printCycloneDx() error {
 	if err != nil {
 		return err
 	}
-	return cyclonedx.NewBOMEncoder(os.Stdout, cyclonedx.BOMFileFormatJSON).SetPretty(true).Encode(bom)
+	if err = cyclonedx.NewBOMEncoder(os.Stdout, cyclonedx.BOMFileFormatJSON).SetPretty(true).Encode(bom); err != nil || rw.outputDir == "" {
+		return err
+	}
+	return utils.DumpCdxContentToFile(bom, rw.outputDir, fmt.Sprintf("%s_output", rw.commandResults.CmdType))
 }
 
 func PrintJson(output interface{}) (err error) {
