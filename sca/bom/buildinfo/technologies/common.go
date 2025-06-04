@@ -37,7 +37,7 @@ func GetExcludePattern(params utils.AuditParams) string {
 }
 
 func CreateTestWorkspace(t *testing.T, sourceDir string) (string, func()) {
-	return tests.CreateTestWorkspace(t, filepath.Join("..", "..", "..", "..", "tests", "testdata", sourceDir))
+	return tests.CreateTestWorkspace(t, filepath.Join("..", "..", "..", "..", "..", "tests", "testdata", sourceDir))
 }
 
 // GetExecutableVersion gets an executable version and prints to the debug log if possible.
