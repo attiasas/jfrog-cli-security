@@ -126,8 +126,8 @@ func (rw *ResultsWriter) PrintScanResults() error {
 		return PrintJson(rw.commandResults.GetScaScansXrayResults())
 	case format.Sarif:
 		return rw.printSarif()
-	case format.CycloneDx:
-		return rw.printCycloneDx()
+		// case format.CycloneDx:
+		// 	return rw.printCycloneDx()
 	}
 	return nil
 }

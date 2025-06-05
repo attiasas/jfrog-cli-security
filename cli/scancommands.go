@@ -262,9 +262,12 @@ func ScanCmd(c *components.Context) error {
 	if err != nil {
 		return err
 	}
-	if c.GetBoolFlagValue(flags.Sbom) && (format != outputFormat.Table && format != outputFormat.CycloneDx) {
-		log.Warn(fmt.Sprintf("The '--%s' flag is only supported with the '%s' or '%s' output formats. Ignoring the flag.", flags.Sbom, outputFormat.Table, outputFormat.CycloneDx))
+	if c.GetBoolFlagValue(flags.Sbom) && format != outputFormat.Table {
+		log.Warn(fmt.Sprintf("The '--%s' flag is only supported with the '%s' output formats. Ignoring the flag.", flags.Sbom, outputFormat.Table))
 	}
+	// if c.GetBoolFlagValue(flags.Sbom) && (format != outputFormat.Table && format != outputFormat.CycloneDx) {
+	// 	log.Warn(fmt.Sprintf("The '--%s' flag is only supported with the '%s' or '%s' output formats. Ignoring the flag.", flags.Sbom, outputFormat.Table, outputFormat.CycloneDx))
+	// }
 	pluginsCommon.FixWinPathsForFileSystemSourcedCmds(specFile, c)
 	minSeverity, err := getMinimumSeverity(c)
 	if err != nil {
