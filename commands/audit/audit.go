@@ -15,6 +15,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/jas/secrets"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies"
+	"github.com/jfrog/jfrog-cli-security/sca/runner/enrich"
 	jfrogScanGraph "github.com/jfrog/jfrog-cli-security/sca/runner/scangraph"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
@@ -414,6 +415,12 @@ func RunScaScans(auditParallelRunner *utils.SecurityParallelRunner, auditParams 
 		if jfrogStrategy, ok := strategy.(*jfrogScanGraph.JfrogScanGraphStrategy); ok {
 			// Prepare the specific scan strategy
 			strategy = jfrogStrategy.WithParams(createXrayScanGraphParams(serverDetails, targetResult, auditParams))
+		}
+		if enrichStrategy, ok := strategy.(*enrich.EnrichScanStrategy); ok {
+			// Prepare the specific enrich scan strategy
+			enrichStrategy.EnrichScanParams.ServerDetails = serverDetails
+			enrichStrategy.EnrichScanParams.ProjectKey = auditParams.resultsContext.ProjectKey
+			strategy = enrichStrategy
 		}
 		// Scan
 		generalError = errors.Join(generalError, scaRunner.RunScaScan(strategy, scaRunner.DependencyScanParams{

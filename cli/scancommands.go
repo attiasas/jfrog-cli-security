@@ -42,6 +42,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo"
 
 	"github.com/jfrog/jfrog-cli-security/sca/runner"
+	enrichScan "github.com/jfrog/jfrog-cli-security/sca/runner/enrich"
 	jfrogScanGraph "github.com/jfrog/jfrog-cli-security/sca/runner/scangraph"
 
 	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
@@ -441,7 +442,13 @@ func getBomGenerator(c *components.Context) (bom.SbomGenerator, error) {
 }
 
 func getScaScanStrategy(c *components.Context) (runner.SbomScanStrategy, error) {
-	return &jfrogScanGraph.JfrogScanGraphStrategy{}, nil
+	switch strings.ToLower(c.GetStringFlagValue(flags.BomGenerator)) {
+	case "old":
+		return &jfrogScanGraph.JfrogScanGraphStrategy{}, nil
+	case "buildinfo":
+		return &enrichScan.EnrichScanStrategy{}, nil
+	}
+	return nil, fmt.Errorf("unknown SCA scan strategy: %s", c.GetStringFlagValue(flags.BomGenerator))
 }
 
 func CreateAuditCmd(c *components.Context) (string, string, *coreConfig.ServerDetails, *audit.AuditCommand, error) {

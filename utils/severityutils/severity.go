@@ -341,3 +341,16 @@ func CycloneDxSeverityToSeverity(severity cyclonedx.Severity) Severity {
 		return Unknown
 	}
 }
+
+func MostSevereSeverity(severities ...Severity) Severity {
+	if len(severities) == 0 {
+		return Unknown
+	}
+	mostSevere := severities[0]
+	for _, severity := range severities[1:] {
+		if CompareSeverity(severity, mostSevere) > 0 {
+			mostSevere = severity
+		}
+	}
+	return mostSevere
+}

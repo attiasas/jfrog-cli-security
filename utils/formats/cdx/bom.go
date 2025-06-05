@@ -373,7 +373,7 @@ func ReduceToRoots(sbom *cyclonedx.BOM) (roots []cyclonedx.Dependency) {
 			dependedRefs.Add(dependsOn)
 		}
 	}
-	ids := getLibraryComponentRefs(sbom)
+	ids := GetLibraryComponentRefs(sbom)
 	if len(ids) == 0 {
 		// If no library components are found, use the dependencies as IDs
 		ids = deps.ToSlice()
@@ -388,7 +388,7 @@ func ReduceToRoots(sbom *cyclonedx.BOM) (roots []cyclonedx.Dependency) {
 	return
 }
 
-func getLibraryComponentRefs(sbom *cyclonedx.BOM) (libraryComponentIds []string) {
+func GetLibraryComponentRefs(sbom *cyclonedx.BOM) (libraryComponentIds []string) {
 	libraryComponentIds = []string{}
 	if sbom == nil || sbom.Components == nil || len(*sbom.Components) == 0 {
 		return
