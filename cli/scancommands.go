@@ -40,6 +40,7 @@ import (
 
 	"github.com/jfrog/jfrog-cli-security/sca/bom"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo"
+	"github.com/jfrog/jfrog-cli-security/sca/bom/scang"
 
 	"github.com/jfrog/jfrog-cli-security/sca/runner"
 	enrichScan "github.com/jfrog/jfrog-cli-security/sca/runner/enrich"
@@ -434,8 +435,8 @@ func getBomGenerator(c *components.Context) (bom.SbomGenerator, error) {
 	case "buildinfo":
 		return &audit.JfrogSourceCodeBomGenerator{}, nil
 		// return &buildinfo.BuildInfoBomGenerator{}, nil
-	// case "scang":
-	// 	return &buildinfo.JfrogBomGenerator{}, nil
+	case "scang":
+		return &scang.ScangBomGenerator{}, nil
 	default:
 		return nil, fmt.Errorf("unknown BOM generator: %s", c.GetStringFlagValue(flags.BomGenerator))
 	}
@@ -443,9 +444,9 @@ func getBomGenerator(c *components.Context) (bom.SbomGenerator, error) {
 
 func getScaScanStrategy(c *components.Context) (runner.SbomScanStrategy, error) {
 	switch strings.ToLower(c.GetStringFlagValue(flags.BomGenerator)) {
-	case "old":
-		return &jfrogScanGraph.JfrogScanGraphStrategy{}, nil
 	case "buildinfo":
+		return &jfrogScanGraph.JfrogScanGraphStrategy{}, nil
+	case "scang":
 		return &enrichScan.EnrichScanStrategy{}, nil
 	}
 	return nil, fmt.Errorf("unknown SCA scan strategy: %s", c.GetStringFlagValue(flags.BomGenerator))

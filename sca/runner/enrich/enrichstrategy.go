@@ -44,7 +44,7 @@ func (ess *EnrichScanStrategy) ScaScanTask(target *cyclonedx.BOM) (response serv
 	if err != nil {
 		return services.ScanResponse{}, fmt.Errorf("failed to create catalog service manager: %w", err)
 	}
-	log.Info(fmt.Sprintf("%s Enriching BOM with %d library components...", clientUtils.GetLogMsgPrefix(ess.threadId, false), len(cdx.GetLibraryComponentRefs(target))))
+	log.Info(fmt.Sprintf("%sEnriching BOM with %d library components...", clientUtils.GetLogMsgPrefix(ess.threadId, false), len(cdx.GetLibraryComponentRefs(target))))
 
 	enriched, err := catalogManager.Enrich(target)
 	if err != nil {
