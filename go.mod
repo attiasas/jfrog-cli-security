@@ -129,7 +129,7 @@ replace github.com/jfrog/jfrog-client-go => github.com/attiasas/jfrog-client-go 
 
 // attiasas/cyclonedx
 // attiasas:add_catalog
-replace github.com/jfrog/jfrog-cli-core/v2 => github.com/attiasas/jfrog-cli-core/v2 v2.0.0-20250608111953-76fb8f52e23a
+replace github.com/jfrog/jfrog-cli-core/v2 => github.com/attiasas/jfrog-cli-core/v2 v2.0.0-20250608135329-cf801c828c25
 
 // replace github.com/jfrog/jfrog-cli-artifactory => github.com/jfrog/jfrog-cli-artifactory main
 
