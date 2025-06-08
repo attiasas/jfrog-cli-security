@@ -11,6 +11,7 @@ import (
 
 	"github.com/jfrog/gofrog/datastructures"
 	"github.com/jfrog/jfrog-client-go/utils/log"
+	"github.com/jfrog/jfrog-client-go/xray/services"
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 
 	"github.com/jfrog/jfrog-cli-security/utils"
@@ -234,6 +235,10 @@ func GetMainComponentName(sbom *cyclonedx.BOM) (mainComponentName string) {
 }
 
 // Conversion functions
+
+func ScanResponseToSbom(destination *cyclonedx.BOM, scanResponse *services.ScanResponse) (err error) {
+	return
+}
 
 func DepsTreeToSbom(trees ...*xrayUtils.GraphNode) (components *[]cyclonedx.Component, dependencies *[]cyclonedx.Dependency) {
 	parsed := datastructures.MakeSet[string]()

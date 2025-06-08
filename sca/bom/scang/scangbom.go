@@ -1,20 +1,18 @@
 package scang
 
 import (
-	"bytes"
-	"errors"
 	"fmt"
-	"os/exec"
 	"path/filepath"
-	"strings"
 
 	"github.com/CycloneDX/cyclonedx-go"
+
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-security/sca/bom"
+	"github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-cli-security/utils/formats/cdx"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 	clientUtils "github.com/jfrog/jfrog-client-go/utils"
-	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 
 	"github.com/jfrog/jfrog-client-go/utils/log"
@@ -25,14 +23,6 @@ type ScangBomGenerator struct {
 	theadId    int
 }
 
-func GetScangExecutableName() string {
-	analyzerManager := "scang"
-	if coreutils.IsWindows() {
-		return analyzerManager + ".exe"
-	}
-	return analyzerManager
-}
-
 func (sbg *ScangBomGenerator) Parallel(threadId int) bom.SbomGenerator {
 	sbgCopy := &ScangBomGenerator{
 		BinaryPath: sbg.BinaryPath,
@@ -41,19 +31,11 @@ func (sbg *ScangBomGenerator) Parallel(threadId int) bom.SbomGenerator {
 	return sbgCopy
 }
 
-func (sbg *ScangBomGenerator) GenerateSbom(target results.ScanTarget) (sbom *cyclonedx.BOM, err error) {
-	log.Info(clientUtils.GetLogMsgPrefix(sbg.theadId, false) + fmt.Sprintf("Generating SBOM for target: %s", target.Target))
-	if sbg.BinaryPath == "" {
-		sbg.BinaryPath, err = GetDefaultScangExecutable()
-		if err != nil {
-			return nil, fmt.Errorf("failed to get scang executable: %w", err)
-		}
+func GetScangExecutableName() string {
+	if coreutils.IsWindows() {
+		return PluginName + ".exe"
 	}
-	sbomCmdResults, err := sbg.executeScang(sbg.BinaryPath, target)
-	if err != nil {
-		return nil, fmt.Errorf("failed to execute scang command: %w", err)
-	}
-	return decodeJsonBytes(sbomCmdResults)
+	return PluginName
 }
 
 func GetDefaultScangExecutable() (scangPath string, err error) {
@@ -61,7 +43,7 @@ func GetDefaultScangExecutable() (scangPath string, err error) {
 	if err != nil {
 		return "", err
 	}
-	scangPath = filepath.Join(jfrogDir, "scang", GetScangExecutableName())
+	scangPath = filepath.Join(jfrogDir, PluginName, GetScangExecutableName())
 	var exists bool
 	if exists, err = fileutils.IsFileExists(scangPath, false); err != nil {
 		return
@@ -72,37 +54,40 @@ func GetDefaultScangExecutable() (scangPath string, err error) {
 	return
 }
 
-func (sbg *ScangBomGenerator) executeScang(scangBinary string, target results.ScanTarget) (output []byte, err error) {
-	log.Debug(fmt.Sprintf("%sExecuting command: %s %q", clientUtils.GetLogMsgPrefix(sbg.theadId, false), scangBinary, target.Target))
-	cmd := exec.Command(scangBinary, target.Target)
-	defer func() {
-		if cmd.ProcessState != nil && !cmd.ProcessState.Exited() {
-			// If the process is still running when the function returns, we attempt to kill it.
-			if killProcessError := cmd.Process.Kill(); errorutils.CheckError(killProcessError) != nil {
-				err = errors.Join(err, killProcessError)
-			}
+func (sbg *ScangBomGenerator) GenerateSbom(target results.ScanTarget) (sbom *cyclonedx.BOM, err error) {
+	log.Info(clientUtils.GetLogMsgPrefix(sbg.theadId, false) + fmt.Sprintf("Generating SBOM for target: %s", target.Target))
+	// Get the path to the scang executable
+	if sbg.BinaryPath == "" {
+		sbg.BinaryPath, err = GetDefaultScangExecutable()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get scang executable: %w", err)
 		}
-	}()
-	// Execute the command and capture its output
-	if output, err = cmd.CombinedOutput(); err != nil {
-		if len(output) > 0 {
-			log.Debug(clientUtils.GetLogMsgPrefix(sbg.theadId, false) + fmt.Sprintf("%s %q output: %s", target.Target, strings.Join(cmd.Args, " "), string(output)))
-		}
+	}
+	// Run the scang command to generate the SBOM
+	if sbom, err = sbg.executeScanner(sbg.BinaryPath, target); err != nil {
 		return nil, fmt.Errorf("failed to execute scang command: %w", err)
 	}
-	// Check if the output is empty
-	if len(output) == 0 {
-		return nil, fmt.Errorf("scang command returned no output for target %s", target.Target)
-	}
+	sbg.logScannerOutput(sbom, target.Target)
 	return
 }
 
-func decodeJsonBytes(bomBytes []byte) (sbom *cyclonedx.BOM, err error) {
-	reader := bytes.NewReader(bomBytes)
-	// Decode the BOM
-	decoder := cyclonedx.NewBOMDecoder(reader, cyclonedx.BOMFileFormatJSON)
-	if err = decoder.Decode(sbom); err != nil {
-		return nil, errorutils.CheckErrorf("failed to decode CycloneDX JSON BOM: %s", err.Error())
+func (sbg *ScangBomGenerator) executeScanner(scangBinary string, target results.ScanTarget) (output *cyclonedx.BOM, err error) {
+	log.Debug(fmt.Sprintf("%sExecuting command: %s %q", clientUtils.GetLogMsgPrefix(sbg.theadId, false), scangBinary, target.Target))
+
+	// Create a new plugin client
+	scanner, err := CreateScannerPluginClient(scangBinary)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create scang plugin client: %w", err)
 	}
-	return sbom, nil
+	scanConfig := Config{
+		Name:    target.Name,
+		Version: "0.0.8",
+	}
+	return scanner.Scan(target.Target, scanConfig)
+}
+
+func (sbg *ScangBomGenerator) logScannerOutput(output *cyclonedx.BOM, target string) {
+	libComponents := cdx.GetLibraryComponentRefs(output)
+	log.Info(clientUtils.GetLogMsgPrefix(sbg.theadId, false) + fmt.Sprintf("SBOM generated for target '%s': (%d lib Components)", target, len(libComponents)))
+	log.Debug(utils.GetAsJsonString(libComponents, false, true))
 }
