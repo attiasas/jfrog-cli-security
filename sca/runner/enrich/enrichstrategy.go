@@ -2,7 +2,6 @@ package enrich
 
 import (
 	"fmt"
-	"os"
 
 	"github.com/CycloneDX/cyclonedx-go"
 
@@ -14,7 +13,6 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils/catalog"
 	"github.com/jfrog/jfrog-cli-security/utils/formats/cdx"
 	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
-	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/jfrog/jfrog-client-go/xray/services"
 )
@@ -57,9 +55,6 @@ func (ess *EnrichScanStrategy) ScaScanTask(target *cyclonedx.BOM) (response serv
 	}
 	log.Info(utils.GetScanVulnerabilitiesLog(utils.ScaScan, vulnerabilities))
 	if str, e := utils.GetAsJsonString(enriched, true, true); e == nil {
-		if err = os.WriteFile("/Users/assafa/Documents/code/jfrog-projects/jfrog-cli-security/scagn.json", []byte(str), 0644); errorutils.CheckError(err) != nil {
-			return services.ScanResponse{}, fmt.Errorf("failed to write scan results to file: %s", err.Error())
-		}
 		log.Debug(fmt.Sprintf("%s Enriched BOM: %s", clientUtils.GetLogMsgPrefix(ess.threadId, false), str))
 	}
 	// response = toScanResponse(enriched)
