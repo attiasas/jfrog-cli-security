@@ -62,8 +62,6 @@ type ParseSbomFunc func(component cyclonedx.Component, relatedDependencies *cycl
 
 type ParseBomScaVulnerabilityFunc func(vulnerability cyclonedx.Vulnerability, relatedComponents []cyclonedx.Component) error
 
-// type ParseBomScaVulnerabilityFunc func(vulnerability cyclonedx.Vulnerability, relatedComponents []cyclonedx.Component) error
-
 // Allows to iterate over the provided SARIF runs and call the provided handler for each issue to process it.
 func ForEachJasIssues(runs []*sarif.Run, entitledForJas bool, handler ParseJasFunc) error {
 	if !entitledForJas || handler == nil {

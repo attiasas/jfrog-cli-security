@@ -14,6 +14,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils/formats/cdx"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
+	clientUtils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/jfrog/jfrog-client-go/xray/services"
 	xrayApi "github.com/jfrog/jfrog-client-go/xray/services/utils"
@@ -73,8 +74,8 @@ type TargetResults struct {
 	ScanTarget
 	AppsConfigModule *jfrogappsconfig.Module `json:"apps_config_module,omitempty"`
 	// All scan results for the target
-	ScaResults         *ScaScanResults             `json:"sca_scans,omitempty"`
-	JasResults         *JasScansResults            `json:"jas_scans,omitempty"`
+	ScaResults *ScaScanResults  `json:"sca_scans,omitempty"`
+	JasResults *JasScansResults `json:"jas_scans,omitempty"`
 	// Errors that occurred during the scans
 	Errors      []error    `json:"errors,omitempty"`
 	errorsMutex sync.Mutex `json:"-"`
@@ -91,22 +92,22 @@ func (sr *ScanResult[T]) IsScanFailed() bool {
 
 type ScaScanResults struct {
 	// Metadata of the scan
-	Descriptors []string `json:"descriptors,omitempty"`
-	IsMultipleRootProject *bool `json:"is_multiple_root_project,omitempty"`
-	DirectDependencies []string       `json:"direct_dependencies,omitempty"`
+	Descriptors           []string `json:"descriptors,omitempty"`
+	IsMultipleRootProject *bool    `json:"is_multiple_root_project,omitempty"`
+	DirectDependencies    []string `json:"direct_dependencies,omitempty"`
 	// Sca scan results
 	XrayResults []ScanResult[services.ScanResponse] `json:"xray_scan,omitempty"`
 	// Sbom (with enriched components and CVE Vulnerabilities) of the target
-	EnrichedSbom        *cyclonedx.BOM `json:"sbom,omitempty"`
-	Violations 		[]services.Violation `json:"violations,omitempty"`
-	ScanStatusCode int `json:"status_code,omitempty"`
+	EnrichedSbom   *cyclonedx.BOM       `json:"sbom,omitempty"`
+	Violations     []services.Violation `json:"violations,omitempty"`
+	ScanStatusCode int                  `json:"status_code,omitempty"`
 }
 
 type JasScansResults struct {
-	JasPackageScanType jasutils.JasPackageScanType `json:"jas_package_scan_type,omitempty"`
-	JasVulnerabilities       JasScanResults             `json:"jas_vulnerabilities,omitempty"`
-	JasViolations            JasScanResults             `json:"jas_violations,omitempty"`
-	ApplicabilityScanResults []ScanResult[[]*sarif.Run] `json:"contextual_analysis,omitempty"`
+	JasPackageScanType       jasutils.JasPackageScanType `json:"jas_package_scan_type,omitempty"`
+	JasVulnerabilities       JasScanResults              `json:"jas_vulnerabilities,omitempty"`
+	JasViolations            JasScanResults              `json:"jas_violations,omitempty"`
+	ApplicabilityScanResults []ScanResult[[]*sarif.Run]  `json:"contextual_analysis,omitempty"`
 }
 
 type JasScanResults struct {
@@ -462,6 +463,7 @@ func (sr *TargetResults) SetSbom(sbom *cyclonedx.BOM) *TargetResults {
 		sr.ScaResults = &ScaScanResults{}
 	}
 	sr.ScaResults.EnrichedSbom = sbom
+	sr.ScaResults.IsMultipleRootProject = clientUtils.Pointer(cdx.IsMultiProject(sr.ScaResults.EnrichedSbom))
 	return sr
 }
 
@@ -471,7 +473,18 @@ func (sr *TargetResults) NewScaScanResults(errorCode int, responses ...services.
 	}
 	for _, response := range responses {
 		sr.ScaResults.XrayResults = append(sr.ScaResults.XrayResults, ScanResult[services.ScanResponse]{Scan: response, StatusCode: errorCode})
+		if sr.Technology == "" {
+			sr.Technology = techutils.Technology(response.ScannedPackageType)
+		}
 	}
+	sr.ScaResults.ScanStatusCode = errorCode
+	return sr.ScaResults
+}
+
+func (sr *TargetResults) NewEnrichedSbomScanResults(errorCode int, sbom *cyclonedx.BOM, violations ...services.Violation) *ScaScanResults {
+	sr.SetSbom(sbom)
+	sr.ScaResults.AddViolations(violations...)
+	sr.ScaResults.ScanStatusCode = errorCode
 	return sr.ScaResults
 }
 
@@ -494,6 +507,14 @@ func (ssr *ScaScanResults) HasFindings() bool {
 		}
 	}
 	return false
+}
+
+func (ssr *ScaScanResults) AddViolations(violations ...services.Violation) *ScaScanResults {
+	if ssr.Violations == nil {
+		ssr.Violations = []services.Violation{}
+	}
+	ssr.Violations = append(ssr.Violations, violations...)
+	return ssr
 }
 
 func (jsr *JasScansResults) AddApplicabilityScanResults(exitCode int, runs ...*sarif.Run) {

@@ -55,34 +55,32 @@ func (ess *EnrichScanStrategy) ScaScanTask(target *cyclonedx.BOM) (response serv
 	}
 	log.Info(utils.GetScanVulnerabilitiesLog(utils.ScaScan, vulnerabilities))
 	if str, e := utils.GetAsJsonString(enriched, true, true); e == nil {
-		log.Debug(fmt.Sprintf("%s Enriched BOM: %s", clientUtils.GetLogMsgPrefix(ess.threadId, false), str))
+		log.Debug(clientUtils.GetLogMsgPrefix(ess.threadId, false) + fmt.Sprintf("Enriched BOM: %s", str))
 	}
 	// response = toScanResponse(enriched)
-	log.Info(fmt.Sprintf("%s Finished '%s' enrich. %s", clientUtils.GetLogMsgPrefix(ess.threadId, false), services.Dependency, utils.GetScanVulnerabilitiesLog(utils.ScaScan, len(response.Vulnerabilities))))
+	log.Info(clientUtils.GetLogMsgPrefix(ess.threadId, false) + fmt.Sprintf("Finished '%s' enrich. %s", services.Dependency, utils.GetScanVulnerabilitiesLog(utils.ScaScan, len(response.Vulnerabilities))))
 	return
 }
 
-func (ess *EnrichScanStrategy) SbomScanTask(target *cyclonedx.BOM) (response *cyclonedx.BOM, err error) {
+func (ess *EnrichScanStrategy) SbomEnrichTask(target *cyclonedx.BOM) (enriched *cyclonedx.BOM, _ []services.Violation, err error) {
 	catalogManager, err := catalog.CreateCatalogServiceManager(ess.ServerDetails, catalog.WithScopedProjectKey(ess.ProjectKey))
 	if err != nil {
-		return nil, fmt.Errorf("failed to create catalog service manager: %w", err)
+		return nil, []services.Violation{}, fmt.Errorf("failed to create catalog service manager: %w", err)
 	}
 	log.Info(clientUtils.GetLogMsgPrefix(ess.threadId, false) + fmt.Sprintf("Enriching BOM with %d library components...", len(cdx.GetLibraryComponentRefs(target))))
-	enriched, err := catalogManager.Enrich(target)
+	enriched, err = catalogManager.Enrich(target)
 	if err != nil {
-		return nil, fmt.Errorf("failed to enrich BOM: %w", err)
+		return nil, []services.Violation{}, fmt.Errorf("failed to enrich BOM: %w", err)
 	}
 	vulnerabilities := 0
 	if enriched.Vulnerabilities != nil {
 		vulnerabilities = len(*enriched.Vulnerabilities)
 	}
-	log.Info(utils.GetScanVulnerabilitiesLog(utils.ScaScan, vulnerabilities))
+	// TODO: remove debug log
 	if str, e := utils.GetAsJsonString(enriched, true, true); e == nil {
 		log.Debug(fmt.Sprintf("%s Enriched BOM: %s", clientUtils.GetLogMsgPrefix(ess.threadId, false), str))
 	}
-	// response = toScanResponse(enriched)
-	response = enriched
-	log.Info(clientUtils.GetLogMsgPrefix(ess.threadId, false) + fmt.Sprintf("Finished '%s' enrich. %s", services.Dependency, utils.GetScanVulnerabilitiesLog(utils.ScaScan, len(*response.Vulnerabilities))))
+	log.Info(clientUtils.GetLogMsgPrefix(ess.threadId, false) + fmt.Sprintf("Finished '%s' enrich. %s", services.Dependency, utils.GetScanVulnerabilitiesLog(utils.ScaScan, vulnerabilities)))
 	return
 }
 

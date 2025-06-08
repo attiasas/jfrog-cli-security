@@ -509,7 +509,7 @@ func (scanCmd *ScanCommand) RunBinaryJasScans(msi string, secretValidation bool,
 		Module:             module,
 		ScansToPerform:     utils.GetAllSupportedScans(),
 		SecretsScanType:    secrets.SecretsScannerDockerScanType,
-		DirectDependencies: cdx.BomToDirectCompIds(targetResults.ScaResults.Sbom),
+		DirectDependencies: cdx.BomToDirectCompIds(targetResults.ScaResults.EnrichedSbom),
 		ApplicableScanType: applicability.ApplicabilityDockerScanScanType,
 		ScanResults:        targetResults,
 	}

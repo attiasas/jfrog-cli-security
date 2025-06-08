@@ -16,9 +16,7 @@ import (
 	xscServices "github.com/jfrog/jfrog-client-go/xsc/services"
 
 	"github.com/jfrog/jfrog-cli-security/utils"
-	"github.com/jfrog/jfrog-cli-security/utils/formats/cdx"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
-	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 )
 
 // SbomScanStrategy is an interface for scanning SBOMs using different strategies.
@@ -121,15 +119,16 @@ func shouldRunScan(params ScaScanParams, threadId int) (bool, error) {
 func scaScanTask(threadId int, targetResult *results.TargetResults, strategy SbomScanStrategy, outputDir string) error {
 	log.Info(clientUtils.GetLogMsgPrefix(threadId, false)+"Running SCA scan for", targetResult.Target)
 	// SCA Scan the target.
-	scanResults, err := strategy.Parallel(threadId).ScaScanTask(targetResult.ScaResults.EnrichedSbom)
+
 	// bomWithVulnerabilities, violations, err := strategy.Parallel(threadId).SbomEnrichTask(targetResult.ScaResults.EnrichedSbom)
+	// // We add the results before checking for errors, so we can display the results even if an error occurred.
+	// targetResult.NewEnrichedSbomScanResults(GetScaScansStatusCode(err), bomWithVulnerabilities, violations...)
+
+	scanResults, err := strategy.Parallel(threadId).ScaScanTask(targetResult.ScaResults.EnrichedSbom)
 	// We add the results before checking for errors, so we can display the results even if an error occurred.
-	targetResult.NewScaScanResults(GetScaScansStatusCode(err, scanResults), scanResults).IsMultipleRootProject = clientUtils.Pointer(cdx.IsMultiProject(targetResult.ScaResults.EnrichedSbom))
+	targetResult.NewScaScanResults(GetScaScansStatusCode(err, scanResults), scanResults)
 	if err != nil {
 		return err
-	}
-	if targetResult.Technology == "" {
-		targetResult.Technology = techutils.Technology(scanResults.ScannedPackageType)
 	}
 	return dumpScanResponseToFileIfNeeded(scanResults, outputDir, utils.ScaScan)
 }
