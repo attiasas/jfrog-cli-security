@@ -345,7 +345,7 @@ func populateScanTargets(cmdResults *results.SecurityCommandResults, params *Aud
 			targetResult.AddTargetError(fmt.Errorf("failed to generate SBOM for %s: %s", targetResult.Target, err.Error()), params.AllowPartialResults())
 			continue
 		}
-		targetResult.Sbom = sbom
+		targetResult.SetSbom(sbom)
 		if params.scanResultsOutputDir == "" {
 			continue
 		}

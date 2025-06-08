@@ -72,13 +72,9 @@ func (rc *ResultContext) HasViolationContext() bool {
 type TargetResults struct {
 	ScanTarget
 	AppsConfigModule *jfrogappsconfig.Module `json:"apps_config_module,omitempty"`
-	// Sbom
-	Sbom               *cyclonedx.BOM `json:"sbom,omitempty"`
-	DirectDependencies []string       `json:"direct_dependencies,omitempty"`
 	// All scan results for the target
 	ScaResults         *ScaScanResults             `json:"sca_scans,omitempty"`
 	JasResults         *JasScansResults            `json:"jas_scans,omitempty"`
-	JasPackageScanType jasutils.JasPackageScanType `json:"jas_package_scan_type,omitempty"`
 	// Errors that occurred during the scans
 	Errors      []error    `json:"errors,omitempty"`
 	errorsMutex sync.Mutex `json:"-"`
@@ -99,9 +95,13 @@ type ScaScanResults struct {
 	Descriptors []string `json:"descriptors,omitempty"`
 	// Sca scan results
 	XrayResults []ScanResult[services.ScanResponse] `json:"xray_scan,omitempty"`
+	// Sbom (with enriched dependencies and Sca scan results) of the target
+	Sbom        *cyclonedx.BOM `json:"sbom,omitempty"`
+	DirectDependencies []string       `json:"direct_dependencies,omitempty"`
 }
 
 type JasScansResults struct {
+	JasPackageScanType jasutils.JasPackageScanType `json:"jas_package_scan_type,omitempty"`
 	JasVulnerabilities       JasScanResults             `json:"jas_vulnerabilities,omitempty"`
 	JasViolations            JasScanResults             `json:"jas_violations,omitempty"`
 	ApplicabilityScanResults []ScanResult[[]*sarif.Run] `json:"contextual_analysis,omitempty"`
@@ -353,19 +353,19 @@ func (sr *TargetResults) GetScanIds() []string {
 
 func (sr *TargetResults) GetDependenciesForApplicabilityScan(flatTree bool) (slice *[]string) {
 	slice = &[]string{}
-	if sr.Sbom == nil || sr.Sbom.Dependencies == nil {
+	if sr.ScaResults == nil || sr.ScaResults.Sbom == nil || sr.ScaResults.Sbom.Dependencies == nil {
 		return
 	}
 	if flatTree {
-		slice = cdx.BomToFlatCompIds(sr.Sbom)
+		slice = cdx.BomToFlatCompIds(sr.ScaResults.Sbom)
 	} else {
-		slice = cdx.BomToDirectCompIds(sr.Sbom)
+		slice = cdx.BomToDirectCompIds(sr.ScaResults.Sbom)
 	}
 	return
 }
 
 func (sr *TargetResults) HasSbomComponents() bool {
-	return len(*cdx.BomToFlatCompIds(sr.Sbom)) > 0
+	return sr.ScaResults != nil && len(*cdx.BomToFlatCompIds(sr.ScaResults.Sbom)) > 0
 }
 
 func (sr *TargetResults) GetScaScansXrayResults() (results []services.ScanResponse) {
@@ -456,7 +456,10 @@ func (sr *TargetResults) SetDescriptors(descriptors ...string) *TargetResults {
 }
 
 func (sr *TargetResults) SetSbom(sbom *cyclonedx.BOM) *TargetResults {
-	sr.Sbom = sbom
+	if sr.ScaResults == nil {
+		sr.ScaResults = &ScaScanResults{}
+	}
+	sr.ScaResults.Sbom = sbom
 	return sr
 }
 
