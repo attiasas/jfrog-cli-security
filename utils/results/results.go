@@ -90,14 +90,16 @@ func (sr *ScanResult[T]) IsScanFailed() bool {
 }
 
 type ScaScanResults struct {
-	IsMultipleRootProject *bool `json:"is_multiple_root_project,omitempty"`
-	// Target of the scan
+	// Metadata of the scan
 	Descriptors []string `json:"descriptors,omitempty"`
+	IsMultipleRootProject *bool `json:"is_multiple_root_project,omitempty"`
+	DirectDependencies []string       `json:"direct_dependencies,omitempty"`
 	// Sca scan results
 	XrayResults []ScanResult[services.ScanResponse] `json:"xray_scan,omitempty"`
-	// Sbom (with enriched dependencies and Sca scan results) of the target
-	Sbom        *cyclonedx.BOM `json:"sbom,omitempty"`
-	DirectDependencies []string       `json:"direct_dependencies,omitempty"`
+	// Sbom (with enriched components and CVE Vulnerabilities) of the target
+	EnrichedSbom        *cyclonedx.BOM `json:"sbom,omitempty"`
+	Violations 		[]services.Violation `json:"violations,omitempty"`
+	ScanStatusCode int `json:"status_code,omitempty"`
 }
 
 type JasScansResults struct {
@@ -353,19 +355,19 @@ func (sr *TargetResults) GetScanIds() []string {
 
 func (sr *TargetResults) GetDependenciesForApplicabilityScan(flatTree bool) (slice *[]string) {
 	slice = &[]string{}
-	if sr.ScaResults == nil || sr.ScaResults.Sbom == nil || sr.ScaResults.Sbom.Dependencies == nil {
+	if sr.ScaResults == nil || sr.ScaResults.EnrichedSbom == nil || sr.ScaResults.EnrichedSbom.Dependencies == nil {
 		return
 	}
 	if flatTree {
-		slice = cdx.BomToFlatCompIds(sr.ScaResults.Sbom)
+		slice = cdx.BomToFlatCompIds(sr.ScaResults.EnrichedSbom)
 	} else {
-		slice = cdx.BomToDirectCompIds(sr.ScaResults.Sbom)
+		slice = cdx.BomToDirectCompIds(sr.ScaResults.EnrichedSbom)
 	}
 	return
 }
 
 func (sr *TargetResults) HasSbomComponents() bool {
-	return sr.ScaResults != nil && len(*cdx.BomToFlatCompIds(sr.ScaResults.Sbom)) > 0
+	return sr.ScaResults != nil && len(*cdx.BomToFlatCompIds(sr.ScaResults.EnrichedSbom)) > 0
 }
 
 func (sr *TargetResults) GetScaScansXrayResults() (results []services.ScanResponse) {
@@ -459,7 +461,7 @@ func (sr *TargetResults) SetSbom(sbom *cyclonedx.BOM) *TargetResults {
 	if sr.ScaResults == nil {
 		sr.ScaResults = &ScaScanResults{}
 	}
-	sr.ScaResults.Sbom = sbom
+	sr.ScaResults.EnrichedSbom = sbom
 	return sr
 }
 

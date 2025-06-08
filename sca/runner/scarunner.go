@@ -28,7 +28,7 @@ type SbomScanStrategy interface {
 	// ScaScanTask scans the given SBOM using the specified technology.
 	ScaScanTask(target *cyclonedx.BOM) (services.ScanResponse, error)
 	// Perform a Scan on the given SBOM and return the CycloneDX BOM.
-	// SbomScanTask(target *cyclonedx.BOM) (*cyclonedx.BOM, error)
+	// SbomEnrichTask(target *cyclonedx.BOM) (*cyclonedx.BOM, []services.Violation, error)
 }
 
 // ScaParams holds the parameters for running SCA scans.
@@ -121,9 +121,10 @@ func shouldRunScan(params ScaScanParams, threadId int) (bool, error) {
 func scaScanTask(threadId int, targetResult *results.TargetResults, strategy SbomScanStrategy, outputDir string) error {
 	log.Info(clientUtils.GetLogMsgPrefix(threadId, false)+"Running SCA scan for", targetResult.Target)
 	// SCA Scan the target.
-	scanResults, err := strategy.Parallel(threadId).ScaScanTask(targetResult.ScaResults.Sbom)
+	scanResults, err := strategy.Parallel(threadId).ScaScanTask(targetResult.ScaResults.EnrichedSbom)
+	// bomWithVulnerabilities, violations, err := strategy.Parallel(threadId).SbomEnrichTask(targetResult.ScaResults.EnrichedSbom)
 	// We add the results before checking for errors, so we can display the results even if an error occurred.
-	targetResult.NewScaScanResults(GetScaScansStatusCode(err, scanResults), scanResults).IsMultipleRootProject = clientUtils.Pointer(cdx.IsMultiProject(targetResult.ScaResults.Sbom))
+	targetResult.NewScaScanResults(GetScaScansStatusCode(err, scanResults), scanResults).IsMultipleRootProject = clientUtils.Pointer(cdx.IsMultiProject(targetResult.ScaResults.EnrichedSbom))
 	if err != nil {
 		return err
 	}
