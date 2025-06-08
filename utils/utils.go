@@ -127,6 +127,13 @@ func GetScanFindingsLog(scanType SubScanType, vulnerabilitiesCount, violationsCo
 	return msg
 }
 
+func GetScanVulnerabilitiesLog(scanType SubScanType, vulnerabilitiesCount int) string {
+	if vulnerabilitiesCount == 0 {
+		return fmt.Sprintf("No %s findings", scanType.String())
+	}
+	return fmt.Sprintf("Found %d %s vulnerabilities", vulnerabilitiesCount, scanType.String())
+}
+
 func IsCI() bool {
 	return strings.ToLower(os.Getenv(coreutils.CI)) == "true"
 }

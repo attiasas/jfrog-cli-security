@@ -60,6 +60,10 @@ type ParseLicensesFunc func(license services.License, impactedPackagesId string,
 type ParseJasFunc func(run *sarif.Run, rule *sarif.ReportingDescriptor, severity severityutils.Severity, result *sarif.Result, location *sarif.Location) error
 type ParseSbomFunc func(component cyclonedx.Component, relatedDependencies *cyclonedx.Dependency, isDirect bool) error
 
+type ParseBomScaVulnerabilityFunc func(vulnerability cyclonedx.Vulnerability, relatedComponents []cyclonedx.Component) error
+
+// type ParseBomScaVulnerabilityFunc func(vulnerability cyclonedx.Vulnerability, relatedComponents []cyclonedx.Component) error
+
 // Allows to iterate over the provided SARIF runs and call the provided handler for each issue to process it.
 func ForEachJasIssues(runs []*sarif.Run, entitledForJas bool, handler ParseJasFunc) error {
 	if !entitledForJas || handler == nil {
@@ -87,6 +91,26 @@ func ForEachJasIssues(runs []*sarif.Run, entitledForJas bool, handler ParseJasFu
 					}
 				}
 			}
+		}
+	}
+	return nil
+}
+
+func ForEachScaVulnerability(target ScanTarget, bom *cyclonedx.BOM, entitledForJas bool, applicabilityRuns []*sarif.Run, handler ParseBomScaVulnerabilityFunc) error {
+	if handler == nil || bom == nil || bom.Vulnerabilities == nil {
+		return nil
+	}
+	for _, vulnerability := range *bom.Vulnerabilities {
+		relatedComponents := make([]cyclonedx.Component, 0, len(*vulnerability.Affects))
+		for _, affectedComponent := range *vulnerability.Affects {
+			relatedComponent := getRelatedComponent(affectedComponent.Ref, bom.Components)
+			if relatedComponent == nil {
+				return errorutils.CheckErrorf("failed while parsing the response from CycloneDX: vulnerability %s affects component %s that is not found in the BOM", vulnerability.BOMRef, affectedComponent.Ref)
+			}
+			relatedComponents = append(relatedComponents, *relatedComponent)
+		}
+		if err := handler(vulnerability, relatedComponents); err != nil {
+			return err
 		}
 	}
 	return nil

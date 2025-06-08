@@ -27,6 +27,8 @@ type SbomScanStrategy interface {
 	Parallel(threadId int) SbomScanStrategy
 	// ScaScanTask scans the given SBOM using the specified technology.
 	ScaScanTask(target *cyclonedx.BOM) (services.ScanResponse, error)
+	// Perform a Scan on the given SBOM and return the CycloneDX BOM.
+	// SbomScanTask(target *cyclonedx.BOM) (*cyclonedx.BOM, error)
 }
 
 // ScaParams holds the parameters for running SCA scans.
