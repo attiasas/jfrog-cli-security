@@ -448,12 +448,15 @@ func SearchForServiceByName(bom *cyclonedx.BOM, serviceName string) *cyclonedx.S
 }
 
 func AddServiceToBomIfNotExists(bom *cyclonedx.BOM, service cyclonedx.Service) {
-	if SearchForServiceByName(bom, service.Name) != nil {
+	if SearchForServiceByName(bom, service.Name) != nil || bom == nil {
 		return // Service already exists
 	}
 	// Add the service to the BOM
-	if bom == nil || bom.Metadata == nil || bom.Metadata.Tools == nil {
-		bom.Metadata = &cyclonedx.Metadata{Tools: &cyclonedx.ToolsChoice{}}
+	if bom.Metadata == nil {
+		bom.Metadata = &cyclonedx.Metadata{}
+	}
+	if bom.Metadata.Tools == nil {
+		bom.Metadata.Tools = &cyclonedx.ToolsChoice{}
 	}
 	if bom.Metadata.Tools.Services == nil {
 		bom.Metadata.Tools.Services = &[]cyclonedx.Service{}

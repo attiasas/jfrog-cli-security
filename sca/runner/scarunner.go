@@ -142,9 +142,9 @@ func scaScanTask(threadId int, targetResult *results.TargetResults, strategy Sbo
 	// return dumpScanResponseToFileIfNeeded(targetResult, outputDir, utils.ScaScan)
 }
 
-// Infer the status code of SCA Xray scan, must have at least one result, if err occurred or any of the results is `failed` return 1, otherwise return 0.
+// Infer the status code of SCA Xray scan, if err occurred or any of the results is `failed` return 1, otherwise return 0.
 func GetScaScansStatusCode(err error, results ...services.ScanResponse) int {
-	if err != nil || len(results) == 0 {
+	if err != nil {
 		return 1
 	}
 	for _, result := range results {

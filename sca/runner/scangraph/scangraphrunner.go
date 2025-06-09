@@ -66,7 +66,7 @@ func (sgs *JfrogScanGraphStrategy) SbomEnrichTask(target *cyclonedx.BOM) (enrich
 	}
 	// Convert the scan results to CycloneDX BOM
 	violations = scanResults.Violations
-	enriched = &cyclonedx.BOM{}
+	enriched = cyclonedx.NewBOM()
 	err = cdx.ScanResponseToSbom(enriched, scanResults)
 	return
 }

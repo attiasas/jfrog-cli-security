@@ -723,10 +723,15 @@ func GetAllTechnologiesList() (technologies []Technology) {
 //     Package type: ""
 func SplitComponentId(componentId string) (compName, compVersion, packageType string) {
 	compName, compVersion, packageType = SplitComponentIdRaw(componentId)
-	if packageType != "" {
-		packageType = packageTypes[packageType]
-	}
+	packageType = ToFormalXrayPackageType(packageType)
 	return
+}
+
+func ToFormalXrayPackageType(packageType string) string {
+	if packageType != "" {
+		return packageTypes[packageType]
+	}
+	return packageType
 }
 
 func SplitComponentIdRaw(componentId string) (string, string, string) {
