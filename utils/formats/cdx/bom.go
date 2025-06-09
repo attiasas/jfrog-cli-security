@@ -275,22 +275,64 @@ func ScanResponseToSbom(destination *cyclonedx.BOM, scanResponse services.ScanRe
 		if vulnerability.ExtendedInformation != nil {
 			extendedDescription = vulnerability.ExtendedInformation.FullDescription
 		}
-		issueIds, cwes := results.ExtractCveIdAndCwe(vulnerability.IssueId, vulnerability.Cves)
+		cves, cwes := results.ExtractCveIdAndCwe(vulnerability.IssueId, vulnerability.Cves)
 		// Create vulnerability for each issueId
-		for issueId := 0; issueId < len(issueIds); issueId++ {
+		for id := 0; id < len(cves); id++ {
 			for compIndex := 0; compIndex < len(impactedPackagesIds); compIndex++ {
 				// Create or get the affected component
 				affectedComponent := getOrCreateScaComponent(destination, impactedPackagesIds[compIndex])
 				// Create or Get the SCA vulnerability
-				cycloneVulnerability := GetOrCreateScaIssue(destination, issueIds[issueId], vulnerability.Summary, extendedDescription, xrayService, cwes, severity, jasutils.NotScanned)
+				cycloneVulnerability := GetOrCreateScaIssue(destination, vulnerability.IssueId, cves[id], vulnerability.Summary, extendedDescription, xrayService, cwes, severity, jasutils.NotScanned)
 				// Attach the affected impacted library component to the vulnerability
 				AttachComponentAffects(cycloneVulnerability, *affectedComponent, func(affectedComponent cyclonedx.Component) cyclonedx.Affects {
-					return CreateScaImpactedAffects(affectedComponent, fixedVersions[issueId])
+					return CreateScaImpactedAffects(affectedComponent, fixedVersions[id])
 				})
 			}
 		}
 	}
+	for _, license := range scanResponse.Licenses {
+		// Prepare the information needed to create the SCA license
+		impactedPackagesIds, _, _, _, err := results.SplitComponents("", license.Components)
+		if err != nil {
+			return err
+		}
+		for compIndex := 0; compIndex < len(impactedPackagesIds); compIndex++ {
+			// Attach the license to the component
+			component := getOrCreateScaComponent(destination, impactedPackagesIds[compIndex])
+			AttachLicenseToComponent(component, cyclonedx.LicenseChoice{
+				License: &cyclonedx.License{
+					ID:   license.Key,
+					Name: license.Name,
+				},
+			})
+		}
+	}
 	return
+}
+
+func AttachLicenseToComponent(component *cyclonedx.Component, license cyclonedx.LicenseChoice) {
+	if component.Licenses == nil {
+		component.Licenses = &cyclonedx.Licenses{}
+	}
+	// Check if the license already exists in the component
+	if hasLicense(*component, license.License.ID) {
+		// The license already exists, no need to add it again
+		return
+	}
+	// Create a new license and add it to the component
+	*component.Licenses = append(*component.Licenses, license)
+}
+
+func hasLicense(component cyclonedx.Component, licenseName string) bool {
+	if component.Licenses == nil || len(*component.Licenses) == 0 {
+		return false
+	}
+	for _, license := range *component.Licenses {
+		if license.License != nil && license.License.ID == licenseName {
+			return true
+		}
+	}
+	return false
 }
 
 func CreateScaImpactedAffects(impactedPackageComponent cyclonedx.Component, fixedVersions []string) (affect cyclonedx.Affects) {
@@ -358,7 +400,7 @@ func getOrCreateScaComponent(destination *cyclonedx.BOM, impactedPackageId strin
 }
 
 // Returns the index of the vulnerability in the BOM
-func GetOrCreateScaIssue(destination *cyclonedx.BOM, id, description, extendedDescription string, source *cyclonedx.Service, cwe []string, severity severityutils.Severity, applicabilityStatus jasutils.ApplicabilityStatus, properties ...cyclonedx.Property) (scaVulnerability *cyclonedx.Vulnerability) {
+func GetOrCreateScaIssue(destination *cyclonedx.BOM, id, cveId, description, extendedDescription string, source *cyclonedx.Service, cwe []string, severity severityutils.Severity, applicabilityStatus jasutils.ApplicabilityStatus, properties ...cyclonedx.Property) (scaVulnerability *cyclonedx.Vulnerability) {
 	if scaVulnerability = SearchExistingVulnerabilityById(destination, id); scaVulnerability != nil {
 		// The vulnerability already exists, update the ratings with the applicable status and attach properties if needed
 		scaVulnerability.Ratings = getRatings(severity, applicabilityStatus)
@@ -369,7 +411,7 @@ func GetOrCreateScaIssue(destination *cyclonedx.BOM, id, description, extendedDe
 	if destination.Vulnerabilities == nil {
 		destination.Vulnerabilities = &[]cyclonedx.Vulnerability{}
 	}
-	vulnerability := CreateBaseVulnerability(id, id, extendedDescription, description, source, cwe, severity, applicabilityStatus, properties...)
+	vulnerability := CreateBaseVulnerability(cveId, id, extendedDescription, description, source, cwe, severity, applicabilityStatus, properties...)
 	*destination.Vulnerabilities = append(*destination.Vulnerabilities, vulnerability)
 	return &(*destination.Vulnerabilities)[len(*destination.Vulnerabilities)-1]
 }
@@ -571,7 +613,7 @@ func populateDepsNodeDataFromBom(node *xrayUtils.GraphNode, sbom *cyclonedx.BOM)
 		// If the node is nil or has a loop, return
 		return
 	}
-	for _, dep := range getDirectDependencies(sbom, node.Id) {
+	for _, dep := range GetDirectDependencies(sbom, node.Id) {
 		depNode := &xrayUtils.GraphNode{Id: dep, Parent: node}
 		// log.Debug(fmt.Sprintf("Adding dependency node: %s to parent node: %s", depNode.Id, node.Id))
 		// Add the dependency to the current node
@@ -642,6 +684,16 @@ func GetComponentIndex(sbom *cyclonedx.BOM, ref string) int {
 	return -1
 }
 
+func SearchComponentByRef(ref string, components ...cyclonedx.Component) (component *cyclonedx.Component) {
+	for _, comp := range components {
+		if comp.BOMRef == ref {
+			return &comp
+		}
+	}
+	// If no component is found with the given ref, return nil
+	return nil
+}
+
 func GetComponent(sbom *cyclonedx.BOM, ref string) *cyclonedx.Component {
 	if sbom == nil || sbom.Components == nil || len(*sbom.Components) == 0 {
 		return nil
@@ -697,7 +749,7 @@ func BomToFullCompTree(sbom *cyclonedx.BOM) (fullDependencyTree *xrayUtils.Binar
 }
 
 func populateCompsNodeDataFromBom(node *xrayUtils.BinaryGraphNode, sbom *cyclonedx.BOM) {
-	for _, depRef := range getDirectDependencies(sbom, XrayComponentIdToPurl(node.Id)) {
+	for _, depRef := range GetDirectDependencies(sbom, XrayComponentIdToPurl(node.Id)) {
 		depNode := toBinaryNode(sbom, depRef)
 		// Add the dependency to the current node
 		node.Nodes = append(node.Nodes, depNode)
@@ -747,7 +799,7 @@ func toBinaryNode(sbom *cyclonedx.BOM, ref string) *xrayUtils.BinaryGraphNode {
 	return node
 }
 
-func getDirectDependencies(sbom *cyclonedx.BOM, componentRef string) (dependencies []string) {
+func GetDirectDependencies(sbom *cyclonedx.BOM, componentRef string) (dependencies []string) {
 	if sbom == nil || sbom.Dependencies == nil {
 		return
 	}
