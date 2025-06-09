@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"net/url"
 	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/CycloneDX/cyclonedx-go"
@@ -15,12 +17,19 @@ import (
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 
 	"github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
+	"github.com/jfrog/jfrog-cli-security/utils/results"
+	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 )
 
 const (
 	binaryPathPropertyName = "jfrog:location:path"
+	xrayToolName           = "JFrog Xray Scanner"
 )
+
+// Regular expression to match CWE IDs, which can be in the format "CWE-1234" or just "1234".
+var cweSupportedPattern = regexp.MustCompile(`(?:CWE-)?(\d+)`)
 
 // Parse a given Package URL (purl) and return the component name, version, and package type.
 // Examples:
@@ -236,8 +245,211 @@ func GetMainComponentName(sbom *cyclonedx.BOM) (mainComponentName string) {
 
 // Conversion functions
 
-func ScanResponseToSbom(destination *cyclonedx.BOM, scanResponse *services.ScanResponse) (err error) {
+func ScanResponseToSbom(destination *cyclonedx.BOM, scanResponse services.ScanResponse) (err error) {
+	xrayService := &cyclonedx.Service{Name: xrayToolName}
+	for _, vulnerability := range scanResponse.Vulnerabilities {
+		// Prepare the information needed to create the SCA vulnerability
+		impactedPackagesIds, fixedVersions, _, _, err := results.SplitComponents("", vulnerability.Components)
+		if err != nil {
+			return err
+		}
+		severity, err := severityutils.ParseSeverity(vulnerability.Severity, false)
+		if err != nil {
+			return err
+		}
+		extendedDescription := ""
+		if vulnerability.ExtendedInformation != nil {
+			extendedDescription = vulnerability.ExtendedInformation.FullDescription
+		}
+		issueIds, cwes := results.ExtractCveIdAndCwe(vulnerability.IssueId, vulnerability.Cves)
+		// Create vulnerability for each issueId
+		for issueId := 0; issueId < len(issueIds); issueId++ {
+			for compIndex := 0; compIndex < len(impactedPackagesIds); compIndex++ {
+				// Create or get the affected component
+				affectedComponent := getOrCreateScaComponent(destination, impactedPackagesIds[compIndex])
+				// Create or Get the SCA vulnerability
+				cycloneVulnerability := getOrCreateScaIssue(destination, issueIds[issueId], vulnerability.Summary, extendedDescription, xrayService, cwes, severity)
+				// Attach the affected impacted library component to the vulnerability
+				AttachComponentAffects(cycloneVulnerability, *affectedComponent, func(affectedComponent cyclonedx.Component) cyclonedx.Affects {
+					return createScaImpactedAffects(affectedComponent, fixedVersions[issueId])
+				})
+			}
+		}
+	}
 	return
+}
+
+func createScaImpactedAffects(impactedPackageComponent cyclonedx.Component, fixedVersions []string) (affect cyclonedx.Affects) {
+	_, impactedPackageVersion, _ := SplitPackageURL(impactedPackageComponent.PackageURL)
+	affect = cyclonedx.Affects{
+		Ref:   impactedPackageComponent.BOMRef,
+		Range: &[]cyclonedx.AffectedVersions{},
+	}
+	// Affected version
+	*affect.Range = append(*affect.Range, cyclonedx.AffectedVersions{
+		Version: impactedPackageVersion,
+		Status:  cyclonedx.VulnerabilityStatusAffected,
+	})
+	// Fixed versions
+	for _, fixedVersion := range fixedVersions {
+		*affect.Range = append(*affect.Range, cyclonedx.AffectedVersions{
+			Version: fixedVersion,
+			Status:  cyclonedx.VulnerabilityStatusNotAffected,
+		})
+	}
+	return
+}
+
+func AttachComponentAffects(issue *cyclonedx.Vulnerability, affectedComponent cyclonedx.Component, affectsGenerator func(affectedComponent cyclonedx.Component) cyclonedx.Affects, relatedProperties ...cyclonedx.Property) {
+	if !HasImpactedAffects(*issue, affectedComponent) {
+		// The affected component is not in the vulnerability, Add the affected component to the vulnerability
+		if issue.Affects == nil {
+			issue.Affects = &[]cyclonedx.Affects{}
+		}
+		*issue.Affects = append(*issue.Affects, affectsGenerator(affectedComponent))
+	}
+	if len(relatedProperties) == 0 {
+		// No properties to add
+		return
+	}
+	// Add the properties to the vulnerability
+	for _, property := range relatedProperties {
+		if issueProperty := SearchProperty(issue.Properties, property.Name); issueProperty != nil {
+			// The property already exists in the vulnerability
+			continue
+		}
+		// Add the property to the vulnerability
+		if issue.Properties == nil {
+			issue.Properties = &[]cyclonedx.Property{}
+		}
+		*issue.Properties = append(*issue.Properties, relatedProperties...)
+	}
+}
+
+func HasImpactedAffects(vulnerability cyclonedx.Vulnerability, affectedComponent cyclonedx.Component) bool {
+	if vulnerability.Affects == nil {
+		return false
+	}
+	for _, affected := range *vulnerability.Affects {
+		if affected.Ref == affectedComponent.BOMRef {
+			return true
+		}
+	}
+	return false
+}
+
+func getOrCreateScaComponent(destination *cyclonedx.BOM, impactedPackageId string) (libComponent *cyclonedx.Component) {
+	ref := GetScaComponentRef(impactedPackageId)
+	// Check if the component already exists in the BOM
+	if componentIndex := GetComponentIndex(destination, ref); componentIndex >= 0 {
+		return
+	}
+	// Create a new component, add it to the BOM and return it
+	if destination.Components == nil {
+		destination.Components = &[]cyclonedx.Component{}
+	}
+	component := CreateScaComponent(impactedPackageId)
+	*destination.Components = append(*destination.Components, component)
+	return &(*destination.Components)[len(*destination.Components)-1]
+}
+
+// Returns the index of the vulnerability in the BOM
+func getOrCreateScaIssue(destination *cyclonedx.BOM, id, description, extendedDescription string, source *cyclonedx.Service, cwe []string, severity severityutils.Severity) (scaVulnerability *cyclonedx.Vulnerability) {
+	if scaVulnerability = SearchExistingVulnerabilityById(destination, id); scaVulnerability != nil {
+		return scaVulnerability
+	}
+	// Create a new SCA vulnerability, add it to the BOM
+	if destination.Vulnerabilities == nil {
+		destination.Vulnerabilities = &[]cyclonedx.Vulnerability{}
+	}
+	vulnerability := CreateBaseVulnerability(id, id, extendedDescription, description, source, cwe, severity, jasutils.NotScanned)
+	*destination.Vulnerabilities = append(*destination.Vulnerabilities, vulnerability)
+	return &(*destination.Vulnerabilities)[len(*destination.Vulnerabilities)-1]
+}
+
+func CreateBaseVulnerability(ref, id, details, description string, source *cyclonedx.Service, cwe []string, severity severityutils.Severity, applicabilityStatus jasutils.ApplicabilityStatus, properties ...cyclonedx.Property) cyclonedx.Vulnerability {
+	vuln := cyclonedx.Vulnerability{
+		BOMRef: ref,
+		ID:     id,
+		Source: &cyclonedx.Source{
+			Name: source.Name,
+		},
+		CWEs:        convertCweToCycloneDx(cwe),
+		Description: description,
+		Detail:      details,
+		Ratings: &[]cyclonedx.VulnerabilityRating{{
+			Severity: severityutils.SeverityToCycloneDxSeverity(severity),
+			Score:    severityutils.GetSeverityScoreFloat64(severity, applicabilityStatus),
+		}},
+	}
+	if len(properties) > 0 {
+		vuln.Properties = &properties
+	}
+	return vuln
+}
+
+func convertCweToCycloneDx(cwe []string) (cweList *[]int) {
+	if cwe == nil || len(cwe) == 0 {
+		return nil
+	}
+	cweList = &[]int{}
+	for _, cweId := range cwe {
+		if cweInt, isSupportedCwe := extractCWENumber(cweId); !isSupportedCwe {
+			log.Warn("Failed to parse CWE ID: ", cweId)
+			continue
+		} else {
+			*cweList = append(*cweList, cweInt)
+		}
+	}
+	return
+}
+
+func extractCWENumber(cweId string) (cweInt int, isSupportedCwe bool) {
+	matches := cweSupportedPattern.FindStringSubmatch(cweId)
+	if len(matches) < 2 {
+		// No CWE id found
+		return 0, false
+	}
+	cweID, err := strconv.Atoi(matches[1])
+	return cweID, err == nil // Return the CWE ID and whether it was successfully parsed
+}
+
+func SearchExistingVulnerabilityById(destination *cyclonedx.BOM, id string) *cyclonedx.Vulnerability {
+	if destination == nil || destination.Vulnerabilities == nil {
+		return nil
+	}
+	for _, vulnerability := range *destination.Vulnerabilities {
+		if vulnerability.BOMRef == id {
+			return &vulnerability
+		}
+	}
+	return nil
+}
+
+func SearchForServiceByName(bom *cyclonedx.BOM, serviceName string) *cyclonedx.Service {
+	if bom == nil || bom.Metadata == nil || bom.Metadata.Tools == nil || bom.Metadata.Tools.Services == nil {
+		return nil
+	}
+	for _, service := range *bom.Metadata.Tools.Services {
+		if service.Name == serviceName {
+			return &service
+		}
+	}
+	return nil
+}
+
+func AddServiceToBomIfNotExists(bom *cyclonedx.BOM, service cyclonedx.Service) {
+	if SearchForServiceByName(bom, service.Name) != nil {
+		return // Service already exists
+	}
+	// Add the service to the BOM
+	if bom == nil || bom.Metadata == nil || bom.Metadata.Tools == nil {
+		bom.Metadata = &cyclonedx.Metadata{Tools: &cyclonedx.ToolsChoice{}}
+	}
+	if bom.Metadata.Tools.Services == nil {
+		bom.Metadata.Tools.Services = &[]cyclonedx.Service{}
+	}
+	*bom.Metadata.Tools.Services = append(*bom.Metadata.Tools.Services, service)
 }
 
 func DepsTreeToSbom(trees ...*xrayUtils.GraphNode) (components *[]cyclonedx.Component, dependencies *[]cyclonedx.Dependency) {
