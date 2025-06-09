@@ -46,7 +46,7 @@ type ViolationContext struct {
 }
 
 type SeverityDetails struct {
-	Severity         string `json:"severity"`
+	Severity         string `json:"severity,omitempty"`
 	SeverityNumValue int    `json:"-"` // For sorting
 }
 
@@ -55,7 +55,7 @@ type ImpactedDependencyDetails struct {
 	ImpactedDependencyName    string         `json:"impactedPackageName"`
 	ImpactedDependencyVersion string         `json:"impactedPackageVersion"`
 	ImpactedDependencyType    string         `json:"impactedPackageType"`
-	Components                []ComponentRow `json:"components"`
+	Components                []ComponentRow `json:"components,omitempty"`
 }
 
 // Used for vulnerabilities and security violations
@@ -69,7 +69,7 @@ type VulnerabilityOrViolationRow struct {
 	IssueId                  string                    `json:"issueId"`
 	References               []string                  `json:"references"`
 	ImpactPaths              [][]ComponentRow          `json:"impactPaths"`
-	JfrogResearchInformation *JfrogResearchInformation `json:"jfrogResearchInformation"`
+	JfrogResearchInformation *JfrogResearchInformation `json:"jfrogResearchInformation,omitempty"`
 	Technology               techutils.Technology      `json:"-"`
 }
 
