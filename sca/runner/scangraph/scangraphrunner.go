@@ -45,6 +45,32 @@ func (sgs *JfrogScanGraphStrategy) Parallel(threadId int) runner.SbomScanStrateg
 	return instance
 }
 
+func (sgs *JfrogScanGraphStrategy) SbomEnrichTask(target *cyclonedx.BOM) (enriched *cyclonedx.BOM, violations []services.Violation, err error) {
+	var scanResults services.ScanResponse
+	scanType := sgs.ScanGraphParams.XrayGraphScanParams().ScanType
+	defer func() {
+		if err == nil {
+			log.Info(clientUtils.GetLogMsgPrefix(sgs.threadId, false) + fmt.Sprintf("Finished '%s' graph scan. %s", scanType, utils.GetScanFindingsLog(utils.ScaScan, len(scanResults.Vulnerabilities), len(scanResults.Violations), -1)))
+		}
+		return
+	}()
+	// Run the Xray scan based on the scan type.
+	if scanType == services.Binary {
+		scanResults, err = sgs.RunXrayBinaryTreeScanGraph(target)
+	} else {
+		scanResults, err = sgs.RunXrayDependenciesTreeScanGraph(target)
+	}
+	if err != nil {
+		err = errorutils.CheckErrorf("scanning %s components failed with error: %s", scanType, err.Error())
+		return
+	}
+	// Convert the scan results to CycloneDX BOM
+	violations = scanResults.Violations
+	enriched = &cyclonedx.BOM{}
+	err = cdx.ScanResponseToSbom(enriched, scanResults)
+	return
+}
+
 func (sgs *JfrogScanGraphStrategy) ScaScanTask(target *cyclonedx.BOM) (techResults services.ScanResponse, err error) {
 	scanType := sgs.ScanGraphParams.XrayGraphScanParams().ScanType
 	defer func() {
@@ -58,60 +84,7 @@ func (sgs *JfrogScanGraphStrategy) ScaScanTask(target *cyclonedx.BOM) (techResul
 	}
 	// Source code scan
 	return sgs.RunXrayDependenciesTreeScanGraph(target)
-
-	// // Prepare the scan parameters.
-	// scanParams := &sgs.ScanGraphParams
-	// scanParams.XrayGraphScanParams().ScanType = sgs.ScanType
-	// if sgs.ScanType == services.Binary {
-	// 	// Binary scan
-	// 	fullCompTree := cdx.BomToFullCompTree(target)
-	// 	scanParams.XrayGraphScanParams().BinaryGraph = fullCompTree
-	// 	if techResults, err = RunXrayBinaryTreeScanGraph(scanParams); err != nil {
-	// 		err = fmt.Errorf("%s Xray component graph scan request on '%s' failed:\n%s", clientUtils.GetLogMsgPrefix(sgs.threadId, false), fullCompTree.Id, err.Error())
-	// 		return
-	// 	}
-	// 	return
-	// }
-	// // Source Code scan
-	// flatDepTree, fullDepTree := cdx.BomToTree(target)
-	// log.Info(fmt.Sprintf("Scanning %d %s dependencies", len(flatDepTree.Nodes), scanParams.Technology) + "...")
-	// // Scan the dependency tree.
-	// if techResults, err = RunXrayDependenciesTreeScanGraph(scanParams); err != nil {
-	// 	err = fmt.Errorf(clientUtils.GetLogMsgPrefix(sgs.threadId, false)+"%s Xray dependency tree scan request on '%s' failed:\n%s", scanParams.Technology, err.Error())
-	// 	return
-	// }
-	// // In Source code Xray Scan Graph, we send flat tree to Xray and construct the impact paths locally to improve performance.
-	// techResults = buildImpactPathsForScanResponse(techResults, fullDepTree)
-
-	// defer log.Info(fmt.Sprintf("Finished '%s' graph scan. %s", scanParams.Technology.ToFormal(), utils.GetScanFindingsLog(utils.ScaScan, len(techResults[0].Vulnerabilities), len(techResults[0].Violations), -1)))
-	// return
 }
-
-// func RunXrayBinaryTreeScanGraph(scanGraphParams *scangraph.ScanGraphParams) (results services.ScanResponse, err error) {
-// 	params := &services.XrayGraphScanParams{
-// 					BinaryGraph:            cdx.BomToFullCompTree(sbom),
-// 					RepoPath:               getXrayRepoPathFromTarget(file.Target),
-// 					Watches:                scanCmd.resultsContext.Watches,
-// 					IncludeLicenses:        scanCmd.resultsContext.IncludeLicenses,
-// 					IncludeVulnerabilities: scanCmd.resultsContext.IncludeVulnerabilities,
-// 					ProjectKey:             scanCmd.resultsContext.ProjectKey,
-// 					ScanType:               services.Binary,
-// 					MultiScanId:            cmdResults.MultiScanId,
-// 					XscVersion:             cmdResults.XscVersion,
-// 					XrayVersion:            cmdResults.XrayVersion,
-// 				}
-
-// 				scanGraphParams := scangraph.NewScanGraphParams().
-// 					SetServerDetails(scanCmd.serverDetails).
-// 					SetXrayGraphScanParams(params).
-// 					SetFixableOnly(scanCmd.fixableOnly).
-// 					SetSeverityLevel(scanCmd.minSeverityFilter.String())
-// 	xrayManager, err := xray.CreateXrayServiceManager(scanGraphParams.ServerDetails())
-// 	if err != nil {
-// 		return
-// 	}
-// 	scanResults, err = scangraph.RunScanGraphAndGetResults(scanGraphParams, xrayManager)
-// }
 
 func (sgs *JfrogScanGraphStrategy) RunXrayBinaryTreeScanGraph(target *cyclonedx.BOM) (results services.ScanResponse, err error) {
 	params := &sgs.ScanGraphParams
@@ -177,55 +150,6 @@ func (sgs *JfrogScanGraphStrategy) RunXrayDependenciesTreeScanGraph(target *cycl
 	results = buildImpactPathsForScanResponse(*scanResults, fullDepTree)
 	return
 }
-
-// func RunXrayDependenciesTreeScanGraph(scanGraphParams *scangraph.ScanGraphParams) (results services.ScanResponse, err error) {
-// 	// Prepare
-// 	// serverDetails, err := sgs.Params.ServerDetails()
-// 	// if err != nil {
-// 	// 	return
-// 	// }
-
-// 	// // Create the scan graph parameters.
-// 	// xrayScanGraphParams := sgs.Params.createXrayGraphScanParams()
-// 	// xrayScanGraphParams.MultiScanId = sgs.Params.GetMultiScanId()
-// 	// xrayScanGraphParams.XrayVersion = sgs.Params.GetXrayVersion()
-// 	// xrayScanGraphParams.XscVersion = sgs.Params.GetXscVersion()
-// 	// xrayScanGraphParams.Technology = tech.String()
-// 	// xrayScanGraphParams.DependenciesGraph = flatDepTree
-// 	// scanGraphParams := scangraph.NewScanGraphParams().
-// 	// 	SetServerDetails(serverDetails).
-// 	// 	SetXrayGraphScanParams(xrayScanGraphParams).
-// 	// 	SetTechnology(tech).
-// 	// 	SetFixableOnly(sgs.Params.fixableOnly).
-// 	// 	SetSeverityLevel(sgs.Params.minSeverityFilter.String())
-
-// 	var scanResults *services.ScanResponse
-// 	technology := scanGraphParams.Technology()
-// 	xrayManager, err := xray.CreateXrayServiceManager(scanGraphParams.ServerDetails())
-// 	if err != nil {
-// 		return
-// 	}
-// 	scanResults, err = scangraph.RunScanGraphAndGetResults(scanGraphParams, xrayManager)
-// 	if err != nil {
-// 		err = errorutils.CheckErrorf("scanning %s dependencies failed with error: %s", technology.ToFormal(), err.Error())
-// 		return
-// 	}
-// 	for i := range scanResults.Vulnerabilities {
-// 		if scanResults.Vulnerabilities[i].Technology == "" {
-// 			scanResults.Vulnerabilities[i].Technology = technology.String()
-// 		}
-// 	}
-// 	for i := range scanResults.Violations {
-// 		if scanResults.Violations[i].Technology == "" {
-// 			scanResults.Violations[i].Technology = technology.String()
-// 		}
-// 	}
-// 	results = *scanResults
-
-// 	// In Source code Xray Scan Graph, we send flat tree to Xray and construct the impact paths locally to improve performance.
-// 	techResults = buildImpactPathsForScanResponse(*scanResults, fullDepTree)
-// 	return
-// }
 
 // BuildImpactPathsForScanResponse builds the full impact paths for each vulnerability found in the scanResult argument, using the dependencyTrees argument.
 // Returns the updated services.ScanResponse slice.

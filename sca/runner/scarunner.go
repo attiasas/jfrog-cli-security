@@ -27,7 +27,7 @@ type SbomScanStrategy interface {
 	// ScaScanTask scans the given SBOM using the specified technology.
 	ScaScanTask(target *cyclonedx.BOM) (services.ScanResponse, error)
 	// Perform a Scan on the given SBOM and return the CycloneDX BOM.
-	// SbomEnrichTask(target *cyclonedx.BOM) (*cyclonedx.BOM, []services.Violation, error)
+	SbomEnrichTask(target *cyclonedx.BOM) (*cyclonedx.BOM, []services.Violation, error)
 }
 
 // ScaParams holds the parameters for running SCA scans.
@@ -125,17 +125,21 @@ func scaScanTask(threadId int, targetResult *results.TargetResults, strategy Sbo
 	log.Info(clientUtils.GetLogMsgPrefix(threadId, false)+"Running SCA scan for", targetResult.Target)
 	// SCA Scan the target.
 
-	// bomWithVulnerabilities, violations, err := strategy.Parallel(threadId).SbomEnrichTask(targetResult.ScaResults.EnrichedSbom)
-	// // We add the results before checking for errors, so we can display the results even if an error occurred.
-	// targetResult.NewEnrichedSbomScanResults(GetScaScansStatusCode(err), bomWithVulnerabilities, violations...)
-
-	scanResults, err := strategy.Parallel(threadId).ScaScanTask(targetResult.ScaResults.EnrichedSbom)
+	bomWithVulnerabilities, violations, err := strategy.Parallel(threadId).SbomEnrichTask(targetResult.ScaResults.EnrichedSbom)
 	// We add the results before checking for errors, so we can display the results even if an error occurred.
-	targetResult.NewScaScanResults(GetScaScansStatusCode(err, scanResults), scanResults)
+	targetResult.NewEnrichedSbomScanResults(GetScaScansStatusCode(err), bomWithVulnerabilities, violations...)
 	if err != nil {
 		return err
 	}
-	return dumpScanResponseToFileIfNeeded(scanResults, outputDir, utils.ScaScan)
+	return dumpEnrichedCdxToFileIfNeeded(bomWithVulnerabilities, outputDir, utils.ScaScan)
+
+	// scanResults, err := strategy.Parallel(threadId).ScaScanTask(targetResult.ScaResults.EnrichedSbom)
+	// We add the results before checking for errors, so we can display the results even if an error occurred.
+	// targetResult.NewScaScanResults(GetScaScansStatusCode(err, scanResults), scanResults)
+	// if err != nil {
+	// 	return err
+	// }
+	// return dumpScanResponseToFileIfNeeded(targetResult, outputDir, utils.ScaScan)
 }
 
 // Infer the status code of SCA Xray scan, must have at least one result, if err occurred or any of the results is `failed` return 1, otherwise return 0.
@@ -161,4 +165,12 @@ func dumpScanResponseToFileIfNeeded(results services.ScanResponse, scanResultsOu
 		return fmt.Errorf("failed to write %s scan results to file: %s", scanType, err.Error())
 	}
 	return utils.DumpContentToFile(fileContent, scanResultsOutputDir, scanType.String())
+}
+
+// If an output dir was provided through --output-dir flag, we create in the provided path new file containing the scan results
+func dumpEnrichedCdxToFileIfNeeded(content *cyclonedx.BOM, scanResultsOutputDir string, scanType utils.SubScanType) (err error) {
+	if scanResultsOutputDir == "" {
+		return
+	}
+	return utils.DumpCdxContentToFile(content, scanResultsOutputDir, scanType.String())
 }

@@ -346,7 +346,7 @@ func getOrCreateScaComponent(destination *cyclonedx.BOM, impactedPackageId strin
 	ref := GetScaComponentRef(impactedPackageId)
 	// Check if the component already exists in the BOM
 	if componentIndex := GetComponentIndex(destination, ref); componentIndex >= 0 {
-		return
+		return &(*destination.Components)[componentIndex]
 	}
 	// Create a new component, add it to the BOM and return it
 	if destination.Components == nil {

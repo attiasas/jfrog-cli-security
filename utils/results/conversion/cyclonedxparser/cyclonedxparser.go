@@ -70,7 +70,6 @@ func (cdc *CmdResultsCycloneDxConverter) Reset(cmdType utils.CommandType, multiS
 	}
 	cdc.bom.Metadata = &cyclonedx.Metadata{
 		Timestamp: time.Now().Format(time.RFC3339),
-		Tools:     &cyclonedx.ToolsChoice{},
 		Authors:   &[]cyclonedx.OrganizationalContact{{Name: "JFrog"}},
 	}
 	return

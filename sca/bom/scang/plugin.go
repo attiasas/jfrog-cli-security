@@ -11,6 +11,7 @@ import (
 )
 
 const PluginName = "scang"
+
 var ScagnMagicCookie = "scang-plugin-v1"
 
 // Implementation of plugin
