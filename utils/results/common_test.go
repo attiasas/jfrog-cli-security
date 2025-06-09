@@ -568,7 +568,7 @@ func TestGetApplicableCveValue(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			cves := convertCves(testCase.cves)
 			for i := range cves {
-				cves[i].Applicability = GetCveApplicabilityField(cves[i].Id, testCase.applicabilityScanResults, testCase.components)
+				cves[i].Applicability = GetCveApplicabilityFieldAndFilterDisqualify(cves[i].Id, testCase.applicabilityScanResults, testCase.components)
 			}
 			applicableValue := GetApplicableCveStatus(testCase.entitledForJas, testCase.applicabilityScanResults, cves)
 			assert.Equal(t, testCase.expectedResult, applicableValue)
