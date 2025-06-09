@@ -99,6 +99,22 @@ func ToPackageUrl(compName, version, packageType string, properties ...cyclonedx
 	return
 }
 
+func AppendProperties(properties *[]cyclonedx.Property, newProperties ...cyclonedx.Property) *[]cyclonedx.Property {
+	for _, property := range newProperties {
+		// Check if the property already exists
+		if existingProperty := SearchProperty(properties, property.Name); existingProperty != nil {
+			// The property already exists
+			continue
+		}
+		if properties == nil {
+			properties = &[]cyclonedx.Property{}
+		}
+		// The property does not exist, append it to the list
+		*properties = append(*properties, property)
+	}
+	return properties
+}
+
 func propertiesToMap(properties ...cyclonedx.Property) (propertiesMap map[string]string) {
 	propertiesMap = make(map[string]string)
 	for _, property := range properties {
@@ -134,9 +150,7 @@ func CreateScaComponent(xrayImpactedPackageId string, properties ...cyclonedx.Pr
 		Version:    compVersion,
 		PackageURL: ToPackageUrl(compName, compVersion, techutils.ToCdxPackageType(compType)),
 	}
-	if len(properties) > 0 {
-		component.Properties = &properties
-	}
+	component.Properties = AppendProperties(component.Properties, properties...)
 	return
 }
 
@@ -268,10 +282,10 @@ func ScanResponseToSbom(destination *cyclonedx.BOM, scanResponse services.ScanRe
 				// Create or get the affected component
 				affectedComponent := getOrCreateScaComponent(destination, impactedPackagesIds[compIndex])
 				// Create or Get the SCA vulnerability
-				cycloneVulnerability := getOrCreateScaIssue(destination, issueIds[issueId], vulnerability.Summary, extendedDescription, xrayService, cwes, severity)
+				cycloneVulnerability := GetOrCreateScaIssue(destination, issueIds[issueId], vulnerability.Summary, extendedDescription, xrayService, cwes, severity, jasutils.NotScanned)
 				// Attach the affected impacted library component to the vulnerability
 				AttachComponentAffects(cycloneVulnerability, *affectedComponent, func(affectedComponent cyclonedx.Component) cyclonedx.Affects {
-					return createScaImpactedAffects(affectedComponent, fixedVersions[issueId])
+					return CreateScaImpactedAffects(affectedComponent, fixedVersions[issueId])
 				})
 			}
 		}
@@ -279,7 +293,7 @@ func ScanResponseToSbom(destination *cyclonedx.BOM, scanResponse services.ScanRe
 	return
 }
 
-func createScaImpactedAffects(impactedPackageComponent cyclonedx.Component, fixedVersions []string) (affect cyclonedx.Affects) {
+func CreateScaImpactedAffects(impactedPackageComponent cyclonedx.Component, fixedVersions []string) (affect cyclonedx.Affects) {
 	_, impactedPackageVersion, _ := SplitPackageURL(impactedPackageComponent.PackageURL)
 	affect = cyclonedx.Affects{
 		Ref:   impactedPackageComponent.BOMRef,
@@ -313,17 +327,7 @@ func AttachComponentAffects(issue *cyclonedx.Vulnerability, affectedComponent cy
 		return
 	}
 	// Add the properties to the vulnerability
-	for _, property := range relatedProperties {
-		if issueProperty := SearchProperty(issue.Properties, property.Name); issueProperty != nil {
-			// The property already exists in the vulnerability
-			continue
-		}
-		// Add the property to the vulnerability
-		if issue.Properties == nil {
-			issue.Properties = &[]cyclonedx.Property{}
-		}
-		*issue.Properties = append(*issue.Properties, relatedProperties...)
-	}
+	issue.Properties = AppendProperties(issue.Properties, relatedProperties...)
 }
 
 func HasImpactedAffects(vulnerability cyclonedx.Vulnerability, affectedComponent cyclonedx.Component) bool {
@@ -354,15 +358,18 @@ func getOrCreateScaComponent(destination *cyclonedx.BOM, impactedPackageId strin
 }
 
 // Returns the index of the vulnerability in the BOM
-func getOrCreateScaIssue(destination *cyclonedx.BOM, id, description, extendedDescription string, source *cyclonedx.Service, cwe []string, severity severityutils.Severity) (scaVulnerability *cyclonedx.Vulnerability) {
+func GetOrCreateScaIssue(destination *cyclonedx.BOM, id, description, extendedDescription string, source *cyclonedx.Service, cwe []string, severity severityutils.Severity, applicabilityStatus jasutils.ApplicabilityStatus, properties ...cyclonedx.Property) (scaVulnerability *cyclonedx.Vulnerability) {
 	if scaVulnerability = SearchExistingVulnerabilityById(destination, id); scaVulnerability != nil {
+		// The vulnerability already exists, update the ratings with the applicable status and attach properties if needed
+		scaVulnerability.Ratings = getRatings(severity, applicabilityStatus)
+		scaVulnerability.Properties = AppendProperties(scaVulnerability.Properties, properties...)
 		return scaVulnerability
 	}
 	// Create a new SCA vulnerability, add it to the BOM
 	if destination.Vulnerabilities == nil {
 		destination.Vulnerabilities = &[]cyclonedx.Vulnerability{}
 	}
-	vulnerability := CreateBaseVulnerability(id, id, extendedDescription, description, source, cwe, severity, jasutils.NotScanned)
+	vulnerability := CreateBaseVulnerability(id, id, extendedDescription, description, source, cwe, severity, applicabilityStatus, properties...)
 	*destination.Vulnerabilities = append(*destination.Vulnerabilities, vulnerability)
 	return &(*destination.Vulnerabilities)[len(*destination.Vulnerabilities)-1]
 }
@@ -377,15 +384,17 @@ func CreateBaseVulnerability(ref, id, details, description string, source *cyclo
 		CWEs:        convertCweToCycloneDx(cwe),
 		Description: description,
 		Detail:      details,
-		Ratings: &[]cyclonedx.VulnerabilityRating{{
-			Severity: severityutils.SeverityToCycloneDxSeverity(severity),
-			Score:    severityutils.GetSeverityScoreFloat64(severity, applicabilityStatus),
-		}},
+		Ratings:     getRatings(severity, applicabilityStatus),
 	}
-	if len(properties) > 0 {
-		vuln.Properties = &properties
-	}
+	vuln.Properties = AppendProperties(vuln.Properties, properties...)
 	return vuln
+}
+
+func getRatings(severity severityutils.Severity, applicabilityStatus jasutils.ApplicabilityStatus) *[]cyclonedx.VulnerabilityRating {
+	return &[]cyclonedx.VulnerabilityRating{{
+		Severity: severityutils.SeverityToCycloneDxSeverity(severity),
+		Score:    severityutils.GetSeverityScoreFloat64(severity, applicabilityStatus),
+	}}
 }
 
 func convertCweToCycloneDx(cwe []string) (cweList *[]int) {

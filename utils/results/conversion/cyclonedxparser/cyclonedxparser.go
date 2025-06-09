@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
-	"strconv"
 	"time"
 
 	"github.com/CycloneDX/cyclonedx-go"
@@ -38,8 +36,6 @@ const (
 	applicabilityStatusPropertyName       = "jfrog:contextual-analysis:status"
 	applicabilityEvidencePropertyTemplate = "jfrog:contextual-analysis:evidence:" + locationIdTemplate
 )
-
-var cweSupportedPattern = regexp.MustCompile(`(?:CWE-)?(\d+)`)
 
 type CmdResultsCycloneDxConverter struct {
 	bom     *cyclonedx.BOM
@@ -142,7 +138,10 @@ func (cdc *CmdResultsCycloneDxConverter) ParseScaIssues(target results.ScanTarge
 				// Create the SCA vulnerability
 				cycloneVulnerability := cdc.getOrCreateScaIssue(issueIds[i], vulnerability.Summary, extendedDescription, source, results.ExtractCweFromCves(cves...), severity, actualStatus)
 				// Attach the affected impacted library component to the vulnerability
-				addScaIssueAffects(cycloneVulnerability, *affectedComponent, fixedVersion)
+				cdx.AttachComponentAffects(cycloneVulnerability, *affectedComponent, func(affectedComponent cyclonedx.Component) cyclonedx.Affects {
+					return cdx.CreateScaImpactedAffects(affectedComponent, fixedVersion)
+				})
+
 				if applicabilityStatuses[i] == nil {
 					continue
 				}
@@ -182,22 +181,15 @@ func getEvidenceLocation(target results.ScanTarget, location string) string {
 }
 
 func (cdc *CmdResultsCycloneDxConverter) addXrayToolIfMissing() (service *cyclonedx.Service) {
-	if service = cdc.searchForService(xrayToolName); service != nil || cdc.bom == nil {
+	if service = cdx.SearchForServiceByName(cdc.bom, xrayToolName); service != nil || cdc.bom == nil {
 		// The service is already in the BOM
 		return
-	}
-	// Add the service to the BOM
-	if cdc.bom.Metadata.Tools == nil {
-		cdc.bom.Metadata.Tools = &cyclonedx.ToolsChoice{}
-	}
-	if cdc.bom.Metadata.Tools.Services == nil {
-		cdc.bom.Metadata.Tools.Services = &[]cyclonedx.Service{}
 	}
 	service = &cyclonedx.Service{
 		Name:    xrayToolName,
 		Version: cdc.xrayVersion,
 	}
-	*cdc.bom.Metadata.Tools.Services = append(*cdc.bom.Metadata.Tools.Services, *service)
+	cdx.AddServiceToBomIfNotExists(cdc.bom, *service)
 	return
 }
 
@@ -357,7 +349,10 @@ func (cdc *CmdResultsCycloneDxConverter) addJasService(runs []results.ScanResult
 			if run == nil || run.Tool.Driver == nil {
 				continue
 			}
-			service = cdc.addJasToolIfMissing(run.Tool.Driver)
+			cdx.AddServiceToBomIfNotExists(cdc.bom, cyclonedx.Service{
+				Name:    run.Tool.Driver.Name,
+				Version: *run.Tool.Driver.Version,
+			})
 		}
 	}
 	return
@@ -403,41 +398,6 @@ func (cdc *CmdResultsCycloneDxConverter) ParseSast(target results.ScanTarget, vi
 	})
 }
 
-func (cdc *CmdResultsCycloneDxConverter) addJasToolIfMissing(tool *sarif.ToolComponent) (service *cyclonedx.Service) {
-	if tool == nil || cdc.bom == nil {
-		return
-	}
-	if service = cdc.searchForService(tool.Name); service != nil {
-		// The service is already in the BOM
-		return
-	}
-	// Add the service to the BOM
-	if cdc.bom.Metadata.Tools == nil {
-		cdc.bom.Metadata.Tools = &cyclonedx.ToolsChoice{}
-	}
-	if cdc.bom.Metadata.Tools.Services == nil {
-		cdc.bom.Metadata.Tools.Services = &[]cyclonedx.Service{}
-	}
-	service = &cyclonedx.Service{
-		Name:    tool.Name,
-		Version: *tool.Version,
-	}
-	*cdc.bom.Metadata.Tools.Services = append(*cdc.bom.Metadata.Tools.Services, *service)
-	return
-}
-
-func (cdc *CmdResultsCycloneDxConverter) searchForService(serviceName string) *cyclonedx.Service {
-	if cdc.bom == nil || cdc.bom.Metadata == nil || cdc.bom.Metadata.Tools == nil || cdc.bom.Metadata.Tools.Services == nil {
-		return nil
-	}
-	for _, service := range *cdc.bom.Metadata.Tools.Services {
-		if service.Name == serviceName {
-			return &service
-		}
-	}
-	return nil
-}
-
 func (cdc *CmdResultsCycloneDxConverter) getOrCreateScaComponent(impactedPackageId string) (componentIndex int) {
 	ref := cdx.GetScaComponentRef(impactedPackageId)
 	// Check if the component already exists in the BOM
@@ -481,62 +441,7 @@ func (cdc *CmdResultsCycloneDxConverter) getExistingVulnerability(ref string) *c
 	return nil
 }
 
-func createBaseVulnerability(ref, id, details, description string, source *cyclonedx.Service, cwe []string, severity severityutils.Severity, applicabilityStatus jasutils.ApplicabilityStatus, properties ...cyclonedx.Property) cyclonedx.Vulnerability {
-	vuln := cyclonedx.Vulnerability{
-		BOMRef: ref,
-		ID:     id,
-		Source: &cyclonedx.Source{
-			Name: source.Name,
-		},
-		CWEs:        convertCweToCycloneDx(cwe),
-		Description: description,
-		Detail:      details,
-		Ratings: &[]cyclonedx.VulnerabilityRating{{
-			Severity: severityutils.SeverityToCycloneDxSeverity(severity),
-			Score:    severityutils.GetSeverityScoreFloat64(severity, applicabilityStatus),
-		}},
-	}
-	if len(properties) > 0 {
-		vuln.Properties = &properties
-	}
-	return vuln
-}
-
-func convertCweToCycloneDx(cwe []string) (cweList *[]int) {
-	if cwe == nil || len(cwe) == 0 {
-		return nil
-	}
-	cweList = &[]int{}
-	for _, cweId := range cwe {
-		if cweInt, isSupportedCwe := extractCWENumber(cweId); !isSupportedCwe {
-			log.Warn("Failed to parse CWE ID: ", cweId)
-			continue
-		} else {
-			*cweList = append(*cweList, cweInt)
-		}
-	}
-	return
-}
-
-func extractCWENumber(cweId string) (cweInt int, isSupportedCwe bool) {
-	matches := cweSupportedPattern.FindStringSubmatch(cweId)
-	if len(matches) < 2 {
-		// No CWE id found
-		return 0, false
-	}
-	cweID, err := strconv.Atoi(matches[1])
-	return cweID, err == nil // Return the CWE ID and whether it was successfully parsed
-}
-
 func (cdc *CmdResultsCycloneDxConverter) getOrCreateScaIssue(id, description, extendedDescription string, source *cyclonedx.Service, cwe []string, severity severityutils.Severity, applicabilityStatus jasutils.ApplicabilityStatus) (scaVulnerability *cyclonedx.Vulnerability) {
-	ref := id
-	if scaVulnerability = cdc.getExistingVulnerability(ref); scaVulnerability != nil {
-		return scaVulnerability
-	}
-	// Create a new SCA vulnerability, add it to the BOM
-	if cdc.bom.Vulnerabilities == nil {
-		cdc.bom.Vulnerabilities = &[]cyclonedx.Vulnerability{}
-	}
 	properties := []cyclonedx.Property{}
 	if applicabilityStatus != jasutils.NotScanned {
 		// Add applicability status to the vulnerability
@@ -545,9 +450,7 @@ func (cdc *CmdResultsCycloneDxConverter) getOrCreateScaIssue(id, description, ex
 			Value: applicabilityStatus.String(),
 		})
 	}
-	vulnerability := createBaseVulnerability(ref, id, extendedDescription, description, source, cwe, severity, applicabilityStatus, properties...)
-	*cdc.bom.Vulnerabilities = append(*cdc.bom.Vulnerabilities, vulnerability)
-	return &(*cdc.bom.Vulnerabilities)[len(*cdc.bom.Vulnerabilities)-1]
+	return cdx.GetOrCreateScaIssue(cdc.bom, id, description, extendedDescription, source, cwe, severity, applicabilityStatus, properties...)
 }
 
 func (cdc *CmdResultsCycloneDxConverter) getOrCreateJasIssue(ref, id, msg, description string, source *cyclonedx.Service, cwe []string, severity severityutils.Severity, applicabilityStatus jasutils.ApplicabilityStatus, properties ...cyclonedx.Property) (scaVulnerability *cyclonedx.Vulnerability) {
@@ -558,65 +461,12 @@ func (cdc *CmdResultsCycloneDxConverter) getOrCreateJasIssue(ref, id, msg, descr
 	if cdc.bom.Vulnerabilities == nil {
 		cdc.bom.Vulnerabilities = &[]cyclonedx.Vulnerability{}
 	}
-	*cdc.bom.Vulnerabilities = append(*cdc.bom.Vulnerabilities, createBaseVulnerability(ref, id, msg, description, source, cwe, severity, applicabilityStatus, properties...))
+	*cdc.bom.Vulnerabilities = append(*cdc.bom.Vulnerabilities, cdx.CreateBaseVulnerability(ref, id, msg, description, source, cwe, severity, applicabilityStatus, properties...))
 	return &(*cdc.bom.Vulnerabilities)[len(*cdc.bom.Vulnerabilities)-1]
 }
 
-func addScaIssueAffects(issue *cyclonedx.Vulnerability, impactedPackageComponent cyclonedx.Component, fixedVersions []string) {
-	addIssueAffects(issue, impactedPackageComponent, func(affectedComponent cyclonedx.Component) cyclonedx.Affects {
-		return createScaImpactedAffects(affectedComponent, fixedVersions)
-	})
-}
-
-func createScaImpactedAffects(impactedPackageComponent cyclonedx.Component, fixedVersions []string) (affect cyclonedx.Affects) {
-	_, impactedPackageVersion, _ := cdx.SplitPackageURL(impactedPackageComponent.PackageURL)
-	affect = cyclonedx.Affects{
-		Ref:   impactedPackageComponent.BOMRef,
-		Range: &[]cyclonedx.AffectedVersions{},
-	}
-	// Affected version
-	*affect.Range = append(*affect.Range, cyclonedx.AffectedVersions{
-		Version: impactedPackageVersion,
-		Status:  cyclonedx.VulnerabilityStatusAffected,
-	})
-	// Fixed versions
-	for _, fixedVersion := range fixedVersions {
-		*affect.Range = append(*affect.Range, cyclonedx.AffectedVersions{
-			Version: fixedVersion,
-			Status:  cyclonedx.VulnerabilityStatusNotAffected,
-		})
-	}
-	return
-}
-
 func addFileIssueAffects(issue *cyclonedx.Vulnerability, fileComponent cyclonedx.Component, properties ...cyclonedx.Property) {
-	addIssueAffects(issue, fileComponent, func(affectedComponent cyclonedx.Component) cyclonedx.Affects {
+	cdx.AttachComponentAffects(issue, fileComponent, func(affectedComponent cyclonedx.Component) cyclonedx.Affects {
 		return cyclonedx.Affects{Ref: affectedComponent.BOMRef}
 	}, properties...)
-}
-
-func addIssueAffects(issue *cyclonedx.Vulnerability, affectedComponent cyclonedx.Component, affectsGenerator func(affectedComponent cyclonedx.Component) cyclonedx.Affects, relatedProperties ...cyclonedx.Property) {
-	if !hasImpactedAffects(*issue, affectedComponent) {
-		// The affected component is not in the vulnerability, Add the affected component to the vulnerability
-		if issue.Affects == nil {
-			issue.Affects = &[]cyclonedx.Affects{}
-		}
-		*issue.Affects = append(*issue.Affects, affectsGenerator(affectedComponent))
-	}
-	if len(relatedProperties) == 0 {
-		// No properties to add
-		return
-	}
-	// Add the properties to the vulnerability
-	for _, property := range relatedProperties {
-		if issueProperty := cdx.SearchProperty(issue.Properties, property.Name); issueProperty != nil {
-			// The property already exists in the vulnerability
-			continue
-		}
-		// Add the property to the vulnerability
-		if issue.Properties == nil {
-			issue.Properties = &[]cyclonedx.Property{}
-		}
-		*issue.Properties = append(*issue.Properties, relatedProperties...)
-	}
 }
