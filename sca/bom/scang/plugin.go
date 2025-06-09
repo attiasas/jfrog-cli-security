@@ -11,6 +11,7 @@ import (
 )
 
 const PluginName = "scang"
+var ScagnMagicCookie = "scang-plugin-v1"
 
 // Implementation of plugin
 type Plugin struct {
@@ -21,7 +22,7 @@ type Plugin struct {
 var PluginHandshakeConfig = goplugin.HandshakeConfig{
 	ProtocolVersion:  1,
 	MagicCookieKey:   "SCANG_PLUGIN_MAGIC_COOKIE",
-	MagicCookieValue: "scang-plugin-v1",
+	MagicCookieValue: ScagnMagicCookie,
 }
 
 type Scanner interface {
