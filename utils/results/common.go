@@ -836,3 +836,19 @@ func SearchTargetResultsByPath(target string, resultsToCompare *SecurityCommandR
 	}
 	return best
 }
+
+func ExtractCveIdAndCwe(issueId string, cves []services.Cve) (cveIds []string, cwe []string) {
+	if len(cves) == 0 {
+		cveIds = append(cveIds, issueId)
+		return
+	}
+	cweMap := datastructures.MakeSet[string]()
+	for _, cve := range cves {
+		if len(cve.Cwe) > 0 {
+			cweMap.AddElements(cve.Cwe...)
+		}
+		cveIds = append(cveIds, cve.Id)
+	}
+	cwe = cweMap.ToSlice()
+	return
+}
