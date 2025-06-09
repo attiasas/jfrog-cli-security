@@ -16,6 +16,7 @@ import (
 	xscServices "github.com/jfrog/jfrog-client-go/xsc/services"
 
 	"github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-cli-security/utils/formats/cdx"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 )
 
@@ -109,11 +110,15 @@ func shouldRunScan(params ScaScanParams, threadId int) (bool, error) {
 			return false, nil
 		}
 	}
-	if !params.ScanResults.HasSbomComponents() {
+	if !hasSbomComponents(params.ScanResults) {
 		log.Debug(fmt.Sprintf(logPrefix+"Skipping SCA scan for %s as no dependencies were found in the target", params.ScanResults.Target))
 		return false, nil
 	}
 	return true, nil
+}
+
+func hasSbomComponents(scanResults *results.TargetResults) bool {
+	return scanResults.ScaResults != nil && len(*cdx.BomToFlatCompIds(scanResults.ScaResults.EnrichedSbom)) > 0
 }
 
 func scaScanTask(threadId int, targetResult *results.TargetResults, strategy SbomScanStrategy, outputDir string) error {

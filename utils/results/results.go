@@ -11,10 +11,8 @@ import (
 	"github.com/jfrog/gofrog/datastructures"
 	jfrogappsconfig "github.com/jfrog/jfrog-apps-config/go"
 	"github.com/jfrog/jfrog-cli-security/utils"
-	"github.com/jfrog/jfrog-cli-security/utils/formats/cdx"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
-	clientUtils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/jfrog/jfrog-client-go/xray/services"
 	xrayApi "github.com/jfrog/jfrog-client-go/xray/services/utils"
@@ -354,23 +352,6 @@ func (sr *TargetResults) GetScanIds() []string {
 	return scanIds.ToSlice()
 }
 
-func (sr *TargetResults) GetDependenciesForApplicabilityScan(flatTree bool) (slice *[]string) {
-	slice = &[]string{}
-	if sr.ScaResults == nil || sr.ScaResults.EnrichedSbom == nil || sr.ScaResults.EnrichedSbom.Dependencies == nil {
-		return
-	}
-	if flatTree {
-		slice = cdx.BomToFlatCompIds(sr.ScaResults.EnrichedSbom)
-	} else {
-		slice = cdx.BomToDirectCompIds(sr.ScaResults.EnrichedSbom)
-	}
-	return
-}
-
-func (sr *TargetResults) HasSbomComponents() bool {
-	return sr.ScaResults != nil && len(*cdx.BomToFlatCompIds(sr.ScaResults.EnrichedSbom)) > 0
-}
-
 func (sr *TargetResults) GetScaScansXrayResults() (results []services.ScanResponse) {
 	if sr.ScaResults == nil {
 		return
@@ -458,13 +439,12 @@ func (sr *TargetResults) SetDescriptors(descriptors ...string) *TargetResults {
 	return sr
 }
 
-func (sr *TargetResults) SetSbom(sbom *cyclonedx.BOM) *TargetResults {
+func (sr *TargetResults) SetSbom(sbom *cyclonedx.BOM) *ScaScanResults {
 	if sr.ScaResults == nil {
 		sr.ScaResults = &ScaScanResults{}
 	}
 	sr.ScaResults.EnrichedSbom = sbom
-	sr.ScaResults.IsMultipleRootProject = clientUtils.Pointer(cdx.IsMultiProject(sr.ScaResults.EnrichedSbom))
-	return sr
+	return sr.ScaResults
 }
 
 func (sr *TargetResults) NewScaScanResults(errorCode int, responses ...services.ScanResponse) *ScaScanResults {

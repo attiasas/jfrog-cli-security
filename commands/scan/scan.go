@@ -423,7 +423,7 @@ func (scanCmd *ScanCommand) createIndexerHandlerFunc(file *spec.File, cmdResults
 			if err != nil {
 				return targetResults.AddTargetError(fmt.Errorf("failed to generate SBOM: %s", err.Error()), false)
 			}
-			targetResults.SetSbom(sbom)
+			targetResults.SetSbom(sbom).IsMultipleRootProject = clientutils.Pointer(cdx.IsMultiProject(sbom))
 			// Add a new task to the second producer/consumer
 			// which will scan the indexed file. (SCA + JAS)
 			taskFunc := func(scanThreadId int) (err error) {

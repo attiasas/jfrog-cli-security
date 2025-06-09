@@ -18,6 +18,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/sca/runner/enrich"
 	jfrogScanGraph "github.com/jfrog/jfrog-cli-security/sca/runner/scangraph"
 	"github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-cli-security/utils/formats/cdx"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/results/output"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
@@ -345,7 +346,7 @@ func populateScanTargets(cmdResults *results.SecurityCommandResults, params *Aud
 			targetResult.AddTargetError(fmt.Errorf("failed to generate SBOM for %s: %s", targetResult.Target, err.Error()), params.AllowPartialResults())
 			continue
 		}
-		targetResult.SetSbom(sbom)
+		targetResult.SetSbom(sbom).IsMultipleRootProject = clientutils.Pointer(cdx.IsMultiProject(sbom))
 		if params.scanResultsOutputDir == "" {
 			continue
 		}
@@ -531,7 +532,7 @@ func createJasScansTasks(auditParallelRunner *utils.SecurityParallelRunner, scan
 				ScansToPerform:              auditParams.ScansToPerform(),
 				SourceResultsToCompare:      scanner.GetResultsToCompare(utils.GetRelativePath(targetResult.Target, scanResults.GetCommonParentPath())),
 				SecretsScanType:             secrets.SecretsScannerType,
-				DirectDependencies:          targetResult.GetDependenciesForApplicabilityScan(auditParams.ShouldGetFlatTreeForApplicableScan(targetResult.Technology)),
+				DirectDependencies:          GetDependenciesForApplicabilityScan(targetResult, auditParams.ShouldGetFlatTreeForApplicableScan(targetResult.Technology)),
 				ThirdPartyApplicabilityScan: auditParams.thirdPartyApplicabilityScan,
 				ApplicableScanType:          applicability.ApplicabilityScannerType,
 				SignedDescriptions:          auditParams.OutputFormat() == format.Sarif,
@@ -547,6 +548,19 @@ func createJasScansTasks(auditParallelRunner *utils.SecurityParallelRunner, scan
 		}
 		return
 	}
+}
+
+func GetDependenciesForApplicabilityScan(targetResult *results.TargetResults, flatTree bool) (slice *[]string) {
+	slice = &[]string{}
+	if targetResult.ScaResults == nil || targetResult.ScaResults.EnrichedSbom == nil || targetResult.ScaResults.EnrichedSbom.Dependencies == nil {
+		return
+	}
+	if flatTree {
+		slice = cdx.BomToFlatCompIds(targetResult.ScaResults.EnrichedSbom)
+	} else {
+		slice = cdx.BomToDirectCompIds(targetResult.ScaResults.EnrichedSbom)
+	}
+	return
 }
 
 func (auditCmd *AuditCommand) getResultWriter(cmdResults *results.SecurityCommandResults) *output.ResultsWriter {
