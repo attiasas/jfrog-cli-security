@@ -503,13 +503,15 @@ func (scanCmd *ScanCommand) RunBinaryJasScans(msi string, secretValidation bool,
 		return
 	}
 	jasParams := runner.JasRunnerParams{
-		Runner:             jasFileProducerConsumer,
-		ServerDetails:      scanCmd.serverDetails,
-		Scanner:            scanner,
-		Module:             module,
-		ScansToPerform:     utils.GetAllSupportedScans(),
-		SecretsScanType:    secrets.SecretsScannerDockerScanType,
-		DirectDependencies: results.BomToDirectCompIds(targetResults.ScaResults.EnrichedSbom),
+		Runner:          jasFileProducerConsumer,
+		ServerDetails:   scanCmd.serverDetails,
+		Scanner:         scanner,
+		Module:          module,
+		ScansToPerform:  utils.GetAllSupportedScans(),
+		SecretsScanType: secrets.SecretsScannerDockerScanType,
+		CvesProvider: func() (directCves []string, indirectCves []string) {
+			return applicability.ExtractDependenciesCvesFromScan(targetResults.GetScaScansXrayResults(), *results.BomToDirectCompIds(targetResults.ScaResults.EnrichedSbom))
+		},
 		ApplicableScanType: applicability.ApplicabilityDockerScanScanType,
 		ScanResults:        targetResults,
 	}

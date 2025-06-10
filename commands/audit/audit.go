@@ -413,11 +413,13 @@ func RunScaScans(auditParallelRunner *utils.SecurityParallelRunner, auditParams 
 	// Scan targets
 	for _, targetResult := range scanResults.Targets {
 		strategy := auditParams.ScanStrategy()
+		newFlow := false
 		if jfrogStrategy, ok := strategy.(*jfrogScanGraph.JfrogScanGraphStrategy); ok {
 			// Prepare the specific scan strategy
 			strategy = jfrogStrategy.WithParams(createXrayScanGraphParams(serverDetails, targetResult, auditParams))
 		}
 		if enrichStrategy, ok := strategy.(*enrich.EnrichScanStrategy); ok {
+			newFlow = true
 			// Prepare the specific enrich scan strategy
 			enrichStrategy.EnrichScanParams.ServerDetails = serverDetails
 			enrichStrategy.EnrichScanParams.ProjectKey = auditParams.resultsContext.ProjectKey
@@ -425,7 +427,8 @@ func RunScaScans(auditParallelRunner *utils.SecurityParallelRunner, auditParams 
 		}
 		// Scan
 		generalError = errors.Join(generalError, scaRunner.RunScaScan(strategy, scaRunner.DependencyScanParams{
-			Runner: auditParallelRunner,
+			Runner:  auditParallelRunner,
+			NewFlow: newFlow,
 			ScaScanParams: scaRunner.ScaScanParams{
 				ScanResults:         targetResult,
 				ServerDetails:       serverDetails,
@@ -524,15 +527,22 @@ func createJasScansTasks(auditParallelRunner *utils.SecurityParallelRunner, scan
 				continue
 			}
 			params := runner.JasRunnerParams{
-				Runner:                      auditParallelRunner,
-				ServerDetails:               serverDetails,
-				Scanner:                     scanner,
-				Module:                      *targetResult.AppsConfigModule,
-				ConfigProfile:               auditParams.AuditBasicParams.GetConfigProfile(),
-				ScansToPerform:              auditParams.ScansToPerform(),
-				SourceResultsToCompare:      scanner.GetResultsToCompare(utils.GetRelativePath(targetResult.Target, scanResults.GetCommonParentPath())),
-				SecretsScanType:             secrets.SecretsScannerType,
-				DirectDependencies:          GetDependenciesForApplicabilityScan(targetResult, auditParams.ShouldGetFlatTreeForApplicableScan(targetResult.Technology)),
+				Runner:                 auditParallelRunner,
+				ServerDetails:          serverDetails,
+				Scanner:                scanner,
+				Module:                 *targetResult.AppsConfigModule,
+				ConfigProfile:          auditParams.AuditBasicParams.GetConfigProfile(),
+				ScansToPerform:         auditParams.ScansToPerform(),
+				SourceResultsToCompare: scanner.GetResultsToCompare(utils.GetRelativePath(targetResult.Target, scanResults.GetCommonParentPath())),
+				SecretsScanType:        secrets.SecretsScannerType,
+				CvesProvider: func() (directCves []string, indirectCves []string) {
+					if len(targetResult.GetScaScansXrayResults()) > 0 {
+						// TODO: Remove this condition when we support SCA scans without Xray results.
+						return applicability.ExtractDependenciesCvesFromScan(targetResult.GetScaScansXrayResults(), *GetDependenciesForApplicabilityScan(targetResult, auditParams.ShouldGetFlatTreeForApplicableScan(targetResult.Technology)))
+					} else {
+						return applicability.ExtractCdxDependenciesCves(targetResult.ScaResults.EnrichedSbom)
+					}
+				},
 				ThirdPartyApplicabilityScan: auditParams.thirdPartyApplicabilityScan,
 				ApplicableScanType:          applicability.ApplicabilityScannerType,
 				SignedDescriptions:          auditParams.OutputFormat() == format.Sarif,

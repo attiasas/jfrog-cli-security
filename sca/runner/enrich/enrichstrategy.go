@@ -76,10 +76,6 @@ func (ess *EnrichScanStrategy) SbomEnrichTask(target *cyclonedx.BOM) (enriched *
 	if enriched.Vulnerabilities != nil {
 		vulnerabilities = len(*enriched.Vulnerabilities)
 	}
-	// TODO: remove debug log
-	if str, e := utils.GetAsJsonString(enriched, true, true); e == nil {
-		log.Debug(fmt.Sprintf("%s Enriched BOM: %s", clientUtils.GetLogMsgPrefix(ess.threadId, false), str))
-	}
 	log.Info(clientUtils.GetLogMsgPrefix(ess.threadId, false) + fmt.Sprintf("Finished '%s' enrich. %s", services.Dependency, utils.GetScanVulnerabilitiesLog(utils.ScaScan, vulnerabilities)))
 	return
 }

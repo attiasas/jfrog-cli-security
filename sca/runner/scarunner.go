@@ -40,7 +40,8 @@ type ScaScanParams struct {
 }
 
 type DependencyScanParams struct {
-	Runner *utils.SecurityParallelRunner
+	Runner  *utils.SecurityParallelRunner
+	NewFlow bool
 	ScaScanParams
 }
 
@@ -56,7 +57,7 @@ func RunScaScan(strategy SbomScanStrategy, params DependencyScanParams) (general
 	}
 	targetResult := params.ScanResults
 	// Create sca scan task
-	if _, taskCreationErr := params.Runner.Runner.AddTaskWithError(createScaScanTaskWithRunner(params.Runner, targetResult, strategy, params.ResultsOutputDir), func(err error) {
+	if _, taskCreationErr := params.Runner.Runner.AddTaskWithError(createScaScanTaskWithRunner(params.Runner, targetResult, strategy, params.ResultsOutputDir, params.NewFlow), func(err error) {
 		_ = targetResult.AddTargetError(fmt.Errorf("failed to execute SCA scan: %s", err.Error()), params.AllowPartialResults)
 	}); taskCreationErr != nil {
 		_ = targetResult.AddTargetError(fmt.Errorf("failed to create SCA scan task: %s", taskCreationErr.Error()), params.AllowPartialResults)
@@ -66,13 +67,13 @@ func RunScaScan(strategy SbomScanStrategy, params DependencyScanParams) (general
 	return
 }
 
-func createScaScanTaskWithRunner(auditParallelRunner *utils.SecurityParallelRunner, targetResult *results.TargetResults, strategy SbomScanStrategy, outputDir string) parallel.TaskFunc {
+func createScaScanTaskWithRunner(auditParallelRunner *utils.SecurityParallelRunner, targetResult *results.TargetResults, strategy SbomScanStrategy, outputDir string, newFlow bool) parallel.TaskFunc {
 	auditParallelRunner.ScaScansWg.Add(1)
 	return func(threadId int) (err error) {
 		defer auditParallelRunner.ScaScansWg.Done()
 		auditParallelRunner.ResultsMu.Lock()
 		defer auditParallelRunner.ResultsMu.Unlock()
-		return scaScanTask(threadId, targetResult, strategy, outputDir)
+		return scaScanTask(threadId, targetResult, strategy, outputDir, newFlow)
 	}
 }
 
@@ -83,7 +84,7 @@ func RunScaBinaryScans(strategy SbomScanStrategy, params ComponentScanParams, th
 		return
 	}
 	// Scan target
-	if taskErr := scaScanTask(threadId, params.ScanResults, strategy, params.ResultsOutputDir); taskErr != nil {
+	if taskErr := scaScanTask(threadId, params.ScanResults, strategy, params.ResultsOutputDir, false); taskErr != nil {
 		return params.ScanResults.AddTargetError(fmt.Errorf("failed to execute SCA scan: %s", taskErr.Error()), params.AllowPartialResults)
 	}
 	return
@@ -120,25 +121,27 @@ func hasSbomComponents(scanResults *results.TargetResults) bool {
 	return scanResults.ScaResults != nil && len(*results.BomToFlatCompIds(scanResults.ScaResults.EnrichedSbom)) > 0
 }
 
-func scaScanTask(threadId int, targetResult *results.TargetResults, strategy SbomScanStrategy, outputDir string) error {
+func scaScanTask(threadId int, targetResult *results.TargetResults, strategy SbomScanStrategy, outputDir string, newFlow bool) error {
 	log.Info(clientUtils.GetLogMsgPrefix(threadId, false)+"Running SCA scan for", targetResult.Target)
 	// SCA Scan the target.
 
-	bomWithVulnerabilities, violations, err := strategy.Parallel(threadId).SbomEnrichTask(targetResult.ScaResults.EnrichedSbom)
+	// TODO: remove the newFlow parameter once we remove the old flow.
+	if newFlow {
+		bomWithVulnerabilities, violations, err := strategy.Parallel(threadId).SbomEnrichTask(targetResult.ScaResults.EnrichedSbom)
+		// We add the results before checking for errors, so we can display the results even if an error occurred.
+		targetResult.NewEnrichedSbomScanResults(GetScaScansStatusCode(err), bomWithVulnerabilities, violations...)
+		if err != nil {
+			return err
+		}
+		return dumpEnrichedCdxToFileIfNeeded(bomWithVulnerabilities, outputDir, utils.ScaScan)
+	}
+	scanResults, err := strategy.Parallel(threadId).ScaScanTask(targetResult.ScaResults.EnrichedSbom)
 	// We add the results before checking for errors, so we can display the results even if an error occurred.
-	targetResult.NewEnrichedSbomScanResults(GetScaScansStatusCode(err), bomWithVulnerabilities, violations...)
+	targetResult.NewScaScanResults(GetScaScansStatusCode(err, scanResults), scanResults)
 	if err != nil {
 		return err
 	}
-	return dumpEnrichedCdxToFileIfNeeded(bomWithVulnerabilities, outputDir, utils.ScaScan)
-
-	// scanResults, err := strategy.Parallel(threadId).ScaScanTask(targetResult.ScaResults.EnrichedSbom)
-	// // We add the results before checking for errors, so we can display the results even if an error occurred.
-	// targetResult.NewScaScanResults(GetScaScansStatusCode(err, scanResults), scanResults)
-	// if err != nil {
-	// 	return err
-	// }
-	// return dumpScanResponseToFileIfNeeded(scanResults, outputDir, utils.ScaScan)
+	return dumpScanResponseToFileIfNeeded(scanResults, outputDir, utils.ScaScan)
 }
 
 // Infer the status code of SCA Xray scan, if err occurred or any of the results is `failed` return 1, otherwise return 0.
