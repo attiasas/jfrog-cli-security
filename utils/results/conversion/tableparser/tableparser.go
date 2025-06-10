@@ -57,6 +57,18 @@ func (tc *CmdResultsTableConverter) ParseNewTargetResults(target results.ScanTar
 	return tc.simpleJsonConvertor.ParseNewTargetResults(target, errors...)
 }
 
+func (tc *CmdResultsTableConverter) ParseSbomLicenses(target results.ScanTarget, components []cyclonedx.Component, dependencies ...cyclonedx.Dependency) error {
+	return tc.simpleJsonConvertor.ParseSbomLicenses(target, components, dependencies...)
+}
+
+func (tc *CmdResultsTableConverter) ParseCVEs(target results.ScanTarget, enrichedSbom results.ScanResult[*cyclonedx.BOM], applicableScan ...results.ScanResult[[]*sarif.Run]) error {
+	return tc.simpleJsonConvertor.ParseCVEs(target, enrichedSbom, applicableScan...)
+}
+
+func (tc *CmdResultsTableConverter) ParseViolations(target results.ScanTarget, violations []services.Violation, applicableScan ...results.ScanResult[[]*sarif.Run]) error {
+	return tc.simpleJsonConvertor.ParseViolations(target, violations, applicableScan...)
+}
+
 func (tc *CmdResultsTableConverter) ParseScaIssues(target results.ScanTarget, violations bool, scaResponse results.ScanResult[services.ScanResponse], applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
 	return tc.simpleJsonConvertor.ParseScaIssues(target, violations, scaResponse, applicableScan...)
 }
