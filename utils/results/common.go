@@ -860,6 +860,13 @@ func ExtractIssuesInfoForCdx(issueId string, cves []formats.CveRow, severity sev
 		cveIds = append(cveIds, cve.Id)
 		cwe = append(cwe, cve.Cwe)
 		ratings = append(ratings, append(CreateCveRatings(cve), CreateSeverityRating(severity, applicabilityStatus)))
+		if cve.Applicability != nil {
+			statuses = append(statuses, cve.Applicability)
+		} else if applicabilityStatus != jasutils.NotScanned {
+			statuses = append(statuses, &formats.Applicability{Status: applicabilityStatus.String()})
+		} else {
+			statuses = append(statuses, nil)
+		}
 	}
 	return
 }
