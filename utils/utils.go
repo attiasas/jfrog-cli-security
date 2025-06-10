@@ -274,15 +274,8 @@ func splitEnvVar(envVar string) (key, value string) {
 	return split[0], strings.Join(split[1:], "=")
 }
 
-func DumpCdxContentToFile(bom *cyclonedx.BOM, scanResultsOutputDir string, filePrefix string) (err error) {
-	if bom == nil || bom.Metadata == nil || bom.Metadata.Component == nil {
-		return fmt.Errorf("failed to write CycloneDX to file: BOM or BOM metadata is nil")
-	}
-	var fileHash string
-	if fileHash, err = Md5Hash(bom.SerialNumber, bom.Metadata.Component.BOMRef, time.Now().String()); err != nil {
-		return fmt.Errorf("failed to write CycloneDX to file: failed to get Metadata hash: %s", err.Error())
-	}
-	pathToSave := filepath.Join(scanResultsOutputDir, fmt.Sprintf("%s_%s_%s.cdx.json", filePrefix, fileHash, getCurrentTimeHash()))
+func DumpCdxContentToFile(bom *cyclonedx.BOM, scanResultsOutputDir, filePrefix string) (err error) {
+	pathToSave := filepath.Join(scanResultsOutputDir, fmt.Sprintf("%s_%s.cdx.json", filePrefix, getCurrentTimeHash()))
 	file, err := os.Create(pathToSave)
 	if err != nil {
 		return errorutils.CheckError(err)
