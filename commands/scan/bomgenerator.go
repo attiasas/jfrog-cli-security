@@ -53,7 +53,7 @@ func (jbg *JfrogBinaryBomGenerator) GenerateSbom(target results.ScanTarget) (sbo
 		log.Debug(clientUtils.GetLogMsgPrefix(jbg.threadId, false), fmt.Sprintf("Empty graph returned for file %s", target.Target))
 		return
 	}
-	sbom.Components, sbom.Dependencies = cdx.CompTreeToSbom(graph)
+	sbom.Components, sbom.Dependencies = results.CompTreeToSbom(graph)
 	return
 }
 

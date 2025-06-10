@@ -76,7 +76,7 @@ func (jbg *JfrogSourceCodeBomGenerator) GenerateSbom(target results.ScanTarget) 
 		err = fmt.Errorf("failed to build dependency tree: %s", bdtErr.Error())
 		return
 	}
-	sbom.Components, sbom.Dependencies = cdx.DepsTreeToSbom(treeResult.FullDepTrees...)
+	sbom.Components, sbom.Dependencies = results.DepsTreeToSbom(treeResult.FullDepTrees...)
 	return
 }
 

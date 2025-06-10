@@ -556,9 +556,9 @@ func GetDependenciesForApplicabilityScan(targetResult *results.TargetResults, fl
 		return
 	}
 	if flatTree {
-		slice = cdx.BomToFlatCompIds(targetResult.ScaResults.EnrichedSbom)
+		slice = results.BomToFlatCompIds(targetResult.ScaResults.EnrichedSbom)
 	} else {
-		slice = cdx.BomToDirectCompIds(targetResult.ScaResults.EnrichedSbom)
+		slice = results.BomToDirectCompIds(targetResult.ScaResults.EnrichedSbom)
 	}
 	return
 }

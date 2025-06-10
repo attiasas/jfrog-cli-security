@@ -6,7 +6,7 @@ import (
 
 	"github.com/CycloneDX/cyclonedx-go"
 	"github.com/jfrog/jfrog-cli-security/sca/runner"
-	"github.com/jfrog/jfrog-cli-security/utils/formats/cdx"
+	"github.com/jfrog/jfrog-cli-security/utils/results"
 
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/xray"
@@ -67,7 +67,7 @@ func (sgs *JfrogScanGraphStrategy) SbomEnrichTask(target *cyclonedx.BOM) (enrich
 	// Convert the scan results to CycloneDX BOM
 	violations = scanResults.Violations
 	enriched = target
-	err = cdx.ScanResponseToSbom(enriched, scanResults)
+	err = results.ScanResponseToSbom(enriched, scanResults)
 	return
 }
 
@@ -86,11 +86,11 @@ func (sgs *JfrogScanGraphStrategy) ScaScanTask(target *cyclonedx.BOM) (techResul
 	return sgs.RunXrayDependenciesTreeScanGraph(target)
 }
 
-func (sgs *JfrogScanGraphStrategy) RunXrayBinaryTreeScanGraph(target *cyclonedx.BOM) (results services.ScanResponse, err error) {
+func (sgs *JfrogScanGraphStrategy) RunXrayBinaryTreeScanGraph(target *cyclonedx.BOM) (response services.ScanResponse, err error) {
 	params := &sgs.ScanGraphParams
 	params.XrayGraphScanParams().ScanType = services.Binary
 	// Convert BOM to tree and set to scan it
-	fullCompTree := cdx.BomToFullCompTree(target)
+	fullCompTree := results.BomToFullCompTree(target)
 	params.XrayGraphScanParams().BinaryGraph = fullCompTree
 	// Scan
 	xrayManager, err := xray.CreateXrayServiceManager(params.ServerDetails(), xray.WithScopedProjectKey(params.XrayGraphScanParams().ProjectKey))
@@ -102,15 +102,15 @@ func (sgs *JfrogScanGraphStrategy) RunXrayBinaryTreeScanGraph(target *cyclonedx.
 		err = errorutils.CheckErrorf("scanning binary components failed with error: %s", err.Error())
 		return
 	}
-	results = *scanResults
+	response = *scanResults
 	return
 }
 
-func (sgs *JfrogScanGraphStrategy) RunXrayDependenciesTreeScanGraph(target *cyclonedx.BOM) (results services.ScanResponse, err error) {
+func (sgs *JfrogScanGraphStrategy) RunXrayDependenciesTreeScanGraph(target *cyclonedx.BOM) (response services.ScanResponse, err error) {
 	params := &sgs.ScanGraphParams
 	params.XrayGraphScanParams().ScanType = services.Dependency
 	// Convert BOM to tree and set the flat dependency tree to the scan parameters to improve net performance.
-	flatDepTree, fullDepTree := cdx.BomToTree(target)
+	flatDepTree, fullDepTree := results.BomToTree(target)
 	search := "github.com/open-policy-agent"
 	for i := range flatDepTree.Nodes {
 		if strings.Contains(flatDepTree.Nodes[i].Id, search) {
@@ -147,7 +147,7 @@ func (sgs *JfrogScanGraphStrategy) RunXrayDependenciesTreeScanGraph(target *cycl
 		}
 	}
 	// In Source code Xray Scan Graph, we send flat tree to Xray and construct the impact paths locally to improve performance.
-	results = buildImpactPathsForScanResponse(*scanResults, fullDepTree)
+	response = buildImpactPathsForScanResponse(*scanResults, fullDepTree)
 	return
 }
 

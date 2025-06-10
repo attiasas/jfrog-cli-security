@@ -2,6 +2,7 @@ package severityutils
 
 import (
 	_ "embed"
+	"strconv"
 	"strings"
 
 	"github.com/CycloneDX/cyclonedx-go"
@@ -259,6 +260,18 @@ func GetSeverityScoreFloat64(severity Severity, applicabilityStatus jasutils.App
 	// convert score to have up to 4 digits after the decimal point
 	convertedScore := float64(int(score*10000)) / 10000
 	return &convertedScore
+}
+
+func GetCvssScore(cvssScore string) *float64 {
+	if cvssScore == "" {
+		return nil
+	}
+	// convert score to float64
+	scoreFloat, err := strconv.ParseFloat(cvssScore, 64)
+	if err != nil {
+		return nil
+	}
+	return &scoreFloat
 }
 
 func GetSeverityPriority(severity Severity, applicabilityStatus jasutils.ApplicabilityStatus) int {

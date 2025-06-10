@@ -13,6 +13,7 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
+	"github.com/jfrog/jfrog-cli-security/utils/formats/cdx"
 	"github.com/jfrog/jfrog-cli-security/utils/formats/sarifutils"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
@@ -95,7 +96,7 @@ func ForEachJasIssues(runs []*sarif.Run, entitledForJas bool, handler ParseJasFu
 }
 
 func ForEachScaVulnerability(target ScanTarget, bom *cyclonedx.BOM, entitledForJas bool, applicabilityRuns []*sarif.Run, handler ParseBomScaVulnerabilityFunc) error {
-	if handler == nil || bom == nil || bom.Vulnerabilities == nil {
+	if handler == nil || bom == nil || bom.Components == nil || bom.Vulnerabilities == nil {
 		return nil
 	}
 	for _, vulnerability := range *bom.Vulnerabilities {
@@ -111,7 +112,7 @@ func ForEachScaVulnerability(target ScanTarget, bom *cyclonedx.BOM, entitledForJ
 		}
 		// Get the related components for the vulnerability
 		for _, affectedComponent := range *vulnerability.Affects {
-			relatedComponent := getRelatedComponent(affectedComponent.Ref, bom.Components)
+			relatedComponent := cdx.SearchComponentByRef(affectedComponent.Ref, *bom.Components...)
 			if relatedComponent == nil {
 				log.Debug(fmt.Sprintf("Skipping vulnerability %s as it has no related component with BOMRef %s", vulnerability.BOMRef, affectedComponent.Ref))
 				continue
@@ -258,84 +259,80 @@ func ForEachSbom(bom *cyclonedx.BOM, handler ParseSbomFunc) (err error) {
 	if handler == nil || bom == nil || bom.Components == nil {
 		return
 	}
-	directComponentRefs := getDirectComponents(bom)
+	dependencies := []cyclonedx.Dependency{}
+	if bom.Dependencies != nil {
+		dependencies = *bom.Dependencies
+	}
 	for _, component := range *bom.Components {
-		// Handle the main component
-		if err := handler(component, getRelatedDependency(component.BOMRef, bom.Dependencies), slices.Contains(directComponentRefs, component.BOMRef)); err != nil {
+		// Handle the main component only
+		isDirect := cdx.SearchParent(component.BOMRef, *bom.Components, dependencies...) == nil
+		if err := handler(component, cdx.SearchDependencyEntry(bom.Dependencies, component.BOMRef), isDirect); err != nil {
 			return err
 		}
-		// Recursively iterate over the component's sub-components
-		if component.Components != nil {
-			for _, dependency := range *component.Components {
-				if err := handler(dependency, getRelatedDependency(dependency.BOMRef, bom.Dependencies), slices.Contains(directComponentRefs, dependency.BOMRef)); err != nil {
-					return err
-				}
-			}
-		}
 	}
 	return
 }
 
-func getDirectComponents(bom *cyclonedx.BOM) (directComponentRefs []string) {
-	if bom == nil || bom.Dependencies == nil {
-		return
-	}
-	applicationRefs := getApplicationComponentRefs(bom)
-	// Collect all the direct dependencies of the 'Application' components
-	for _, dependency := range *bom.Dependencies {
-		if slices.Contains(applicationRefs, dependency.Ref) {
-			directComponentRefs = append(directComponentRefs, *dependency.Dependencies...)
-		}
-	}
-	return directComponentRefs
-}
+// func getDirectComponents(bom *cyclonedx.BOM) (directComponentRefs []string) {
+// 	if bom == nil || bom.Dependencies == nil {
+// 		return
+// 	}
+// 	applicationRefs := getApplicationComponentRefs(bom)
+// 	// Collect all the direct dependencies of the 'Application' components
+// 	for _, dependency := range *bom.Dependencies {
+// 		if slices.Contains(applicationRefs, dependency.Ref) {
+// 			directComponentRefs = append(directComponentRefs, *dependency.Dependencies...)
+// 		}
+// 	}
+// 	return directComponentRefs
+// }
 
-func getApplicationComponentRefs(bom *cyclonedx.BOM) (applicationComponentRefs []string) {
-	if bom == nil || bom.Components == nil {
-		return
-	}
-	// Collect all the 'Application' components from the BOM
-	if bom.Metadata == nil || bom.Metadata.Component == nil {
-		return
-	}
-	mainComponent := bom.Metadata.Component
-	if mainComponent.Type == cyclonedx.ComponentTypeApplication {
-		applicationComponentRefs = append(applicationComponentRefs, mainComponent.BOMRef)
-	}
-	if mainComponent.Components == nil {
-		return
-	}
-	for _, component := range *mainComponent.Components {
-		if component.Type == cyclonedx.ComponentTypeApplication {
-			applicationComponentRefs = append(applicationComponentRefs, component.BOMRef)
-		}
-	}
-	return
-}
+// func getApplicationComponentRefs(bom *cyclonedx.BOM) (applicationComponentRefs []string) {
+// 	if bom == nil || bom.Components == nil {
+// 		return
+// 	}
+// 	// Collect all the 'Application' components from the BOM
+// 	if bom.Metadata == nil || bom.Metadata.Component == nil {
+// 		return
+// 	}
+// 	mainComponent := bom.Metadata.Component
+// 	if mainComponent.Type == cyclonedx.ComponentTypeApplication {
+// 		applicationComponentRefs = append(applicationComponentRefs, mainComponent.BOMRef)
+// 	}
+// 	if mainComponent.Components == nil {
+// 		return
+// 	}
+// 	for _, component := range *mainComponent.Components {
+// 		if component.Type == cyclonedx.ComponentTypeApplication {
+// 			applicationComponentRefs = append(applicationComponentRefs, component.BOMRef)
+// 		}
+// 	}
+// 	return
+// }
 
-func getRelatedDependency(bomRef string, dependencies *[]cyclonedx.Dependency) *cyclonedx.Dependency {
-	if dependencies == nil {
-		return nil
-	}
-	for _, dependency := range *dependencies {
-		if dependency.Ref == bomRef {
-			return &dependency
-		}
-	}
-	return nil
-}
+// func getRelatedDependency(bomRef string, dependencies *[]cyclonedx.Dependency) *cyclonedx.Dependency {
+// 	if dependencies == nil {
+// 		return nil
+// 	}
+// 	for _, dependency := range *dependencies {
+// 		if dependency.Ref == bomRef {
+// 			return &dependency
+// 		}
+// 	}
+// 	return nil
+// }
 
-func getRelatedComponent(bomRef string, components *[]cyclonedx.Component) *cyclonedx.Component {
-	if components == nil {
-		return nil
-	}
-	for _, component := range *components {
-		if component.BOMRef == bomRef {
-			return &component
-		}
-	}
-	return nil
-}
+// func getRelatedComponent(bomRef string, components *[]cyclonedx.Component) *cyclonedx.Component {
+// 	if components == nil {
+// 		return nil
+// 	}
+// 	for _, component := range *components {
+// 		if component.BOMRef == bomRef {
+// 			return &component
+// 		}
+// 	}
+// 	return nil
+// }
 
 func SplitComponents(target string, impactedPackages map[string]services.Component) (impactedPackagesIds []string, fixedVersions [][]string, directComponents [][]formats.ComponentRow, impactPaths [][][]formats.ComponentRow, err error) {
 	if len(impactedPackages) == 0 {
@@ -828,33 +825,6 @@ func GetSecretResultApplicability(result *sarif.Result) *formats.Applicability {
 	return &formats.Applicability{Status: status, ScannerDescription: statusDescription}
 }
 
-func ExtractCweFromCves(cves ...formats.CveRow) (cwe []string) {
-	if len(cves) == 0 {
-		return
-	}
-	// Make sure unique
-	cweMap := datastructures.MakeSet[string]()
-	for _, cve := range cves {
-		if len(cve.Cwe) == 0 {
-			continue
-		}
-		cweMap.AddElements(cve.Cwe...)
-	}
-	return cweMap.ToSlice()
-}
-
-func GetActualCves(issueId string, cves []formats.CveRow) (ids []string, statuses []*formats.Applicability) {
-	if len(cves) == 0 {
-		ids = append(ids, issueId)
-		statuses = append(statuses, nil)
-	}
-	for _, cve := range cves {
-		ids = append(ids, cve.Id)
-		statuses = append(statuses, cve.Applicability)
-	}
-	return
-}
-
 func SearchTargetResultsByPath(target string, resultsToCompare *SecurityCommandResults) (targetResults *TargetResults) {
 	if resultsToCompare == nil {
 		return
@@ -874,19 +844,45 @@ func SearchTargetResultsByPath(target string, resultsToCompare *SecurityCommandR
 	return best
 }
 
-func ExtractCveIdAndCwe(issueId string, cves []services.Cve) (cveIds []string, cwe []string) {
+func ExtractIssuesInfoForCdx(issueId string, cves []formats.CveRow, severity severityutils.Severity, applicabilityStatus jasutils.ApplicabilityStatus) (cveIds []string, statuses []*formats.Applicability, cwe [][]string, ratings [][]cyclonedx.VulnerabilityRating) {
 	if len(cves) == 0 {
 		cveIds = append(cveIds, issueId)
+		ratings = [][]cyclonedx.VulnerabilityRating{{CreateSeverityRating(severity, applicabilityStatus)}}
+		if applicabilityStatus != jasutils.NotScanned {
+			statuses = []*formats.Applicability{{Status: string(applicabilityStatus)}}
+		} else {
+			statuses = []*formats.Applicability{nil}
+		}
+		cwe = [][]string{{}}
 		return
 	}
-	cweMap := datastructures.MakeSet[string]()
 	for _, cve := range cves {
-		if len(cve.Cwe) > 0 {
-			cweMap.AddElements(cve.Cwe...)
-		}
 		cveIds = append(cveIds, cve.Id)
+		cwe = append(cwe, cve.Cwe)
+		ratings = append(ratings, append(CreateCveRatings(cve), CreateSeverityRating(severity, applicabilityStatus)))
 	}
-	cwe = cweMap.ToSlice()
+	return
+}
+
+func CdxToFixedVersions(affectedVersions *[]cyclonedx.AffectedVersions) (fixedVersion []string) {
+	if affectedVersions == nil || len(*affectedVersions) == 0 {
+		return
+	}
+	for _, version := range *affectedVersions {
+		if version.Version != "" {
+			fixedVersion = append(fixedVersion, version.Version)
+		}
+	}
+	return
+}
+
+func GetDirectDependenciesAsComponentRows(component cyclonedx.Component, components []cyclonedx.Component, dependencies []cyclonedx.Dependency) (directComponents []formats.ComponentRow) {
+	if parent := cdx.SearchParent(component.BOMRef, components, dependencies...); parent != nil {
+		directComponents = append(directComponents, formats.ComponentRow{
+			Name:    parent.Name,
+			Version: parent.Version,
+		})
+	}
 	return
 }
 
@@ -894,10 +890,54 @@ func RatingsToSeverity(ratings *[]cyclonedx.VulnerabilityRating) (severity sever
 	if ratings == nil || len(*ratings) == 0 {
 		return severityutils.Unknown
 	}
-	// Get the highest severity rating
+	// If Xray provided ratings, we use them to determine the severity.
+	if xraySeverity := cdx.SearchRating(ratings, cyclonedx.ScoringMethodOther, &cyclonedx.Source{Name: utils.XrayToolName}); xraySeverity != nil {
+		return severityutils.CycloneDxSeverityToSeverity(xraySeverity.Severity)
+	}
+	// Xray didn't provide severity, Get the highest severity rating
 	severities := []severityutils.Severity{}
 	for _, rating := range *ratings {
 		severities = append(severities, severityutils.CycloneDxSeverityToSeverity(rating.Severity))
 	}
 	return severityutils.MostSevereSeverity(severities...)
+}
+
+func CdxVulnToCveRows(vulnerability cyclonedx.Vulnerability, applicability *formats.Applicability) (cveRows []formats.CveRow) {
+	cwes := []string{}
+	if vulnerability.CWEs != nil {
+		for _, cwe := range *vulnerability.CWEs {
+			cwes = append(cwes, strconv.Itoa(cwe))
+		}
+	}
+	cvssV2 := ""
+	cvssV2Vector := ""
+	if rating := cdx.SearchRating(vulnerability.Ratings, cyclonedx.ScoringMethodCVSSv2); rating != nil {
+		if rating.Score != nil {
+			// convert the score to string using fmt.Sprintf to ensure it is a string
+			cvssV2 = fmt.Sprintf("%v", *rating.Score)
+		}
+		cvssV2Vector = rating.Vector
+	}
+	cvssV3 := ""
+	cvssV3Vector := ""
+	if rating := cdx.SearchRating(vulnerability.Ratings, cyclonedx.ScoringMethodCVSSv3); rating != nil {
+		if rating.Score != nil {
+			// convert the score to string using fmt.Sprintf to ensure it is a string
+			cvssV3 = fmt.Sprintf("%v", *rating.Score)
+		}
+		cvssV3Vector = rating.Vector
+	}
+	// If vulnerability ID starts with "CVE-", we consider it a CVE ID.
+	if strings.HasPrefix(vulnerability.BOMRef, "CVE-") {
+		cveRows = append(cveRows, formats.CveRow{
+			Id:            vulnerability.BOMRef,
+			Cwe:           cwes,
+			Applicability: applicability,
+			CvssV2:        cvssV2,
+			CvssV2Vector:  cvssV2Vector,
+			CvssV3:        cvssV3,
+			CvssV3Vector:  cvssV3Vector,
+		})
+	}
+	return
 }

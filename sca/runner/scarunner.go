@@ -16,7 +16,6 @@ import (
 	xscServices "github.com/jfrog/jfrog-client-go/xsc/services"
 
 	"github.com/jfrog/jfrog-cli-security/utils"
-	"github.com/jfrog/jfrog-cli-security/utils/formats/cdx"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 )
 
@@ -118,7 +117,7 @@ func shouldRunScan(params ScaScanParams, threadId int) (bool, error) {
 }
 
 func hasSbomComponents(scanResults *results.TargetResults) bool {
-	return scanResults.ScaResults != nil && len(*cdx.BomToFlatCompIds(scanResults.ScaResults.EnrichedSbom)) > 0
+	return scanResults.ScaResults != nil && len(*results.BomToFlatCompIds(scanResults.ScaResults.EnrichedSbom)) > 0
 }
 
 func scaScanTask(threadId int, targetResult *results.TargetResults, strategy SbomScanStrategy, outputDir string) error {
@@ -134,12 +133,12 @@ func scaScanTask(threadId int, targetResult *results.TargetResults, strategy Sbo
 	return dumpEnrichedCdxToFileIfNeeded(bomWithVulnerabilities, outputDir, utils.ScaScan)
 
 	// scanResults, err := strategy.Parallel(threadId).ScaScanTask(targetResult.ScaResults.EnrichedSbom)
-	// We add the results before checking for errors, so we can display the results even if an error occurred.
+	// // We add the results before checking for errors, so we can display the results even if an error occurred.
 	// targetResult.NewScaScanResults(GetScaScansStatusCode(err, scanResults), scanResults)
 	// if err != nil {
 	// 	return err
 	// }
-	// return dumpScanResponseToFileIfNeeded(targetResult, outputDir, utils.ScaScan)
+	// return dumpScanResponseToFileIfNeeded(scanResults, outputDir, utils.ScaScan)
 }
 
 // Infer the status code of SCA Xray scan, if err occurred or any of the results is `failed` return 1, otherwise return 0.
