@@ -282,11 +282,12 @@ func ScanResponseToSbom(destination *cyclonedx.BOM, scanResponse services.ScanRe
 				// Create or get the affected component
 				affectedComponent := getOrCreateScaComponent(destination, impactedPackagesIds[compIndex])
 				// Create or Get the SCA vulnerability
-				cycloneVulnerability := GetOrCreateScaIssue(destination, vulnerability.IssueId, cves[id], vulnerability.Summary, extendedDescription, xrayService, cwes, severity, jasutils.NotScanned)
+				cycloneVulnerability := GetOrCreateScaIssue(destination, vulnerability.IssueId, cves[id], vulnerability.Summary, extendedDescription, xrayService, cwes, vulnerability.References, severity, jasutils.NotScanned)
 				// Attach the affected impacted library component to the vulnerability
 				AttachComponentAffects(cycloneVulnerability, *affectedComponent, func(affectedComponent cyclonedx.Component) cyclonedx.Affects {
 					return CreateScaImpactedAffects(affectedComponent, fixedVersions[id])
 				})
+
 			}
 		}
 	}
@@ -400,7 +401,7 @@ func getOrCreateScaComponent(destination *cyclonedx.BOM, impactedPackageId strin
 }
 
 // Returns the index of the vulnerability in the BOM
-func GetOrCreateScaIssue(destination *cyclonedx.BOM, id, cveId, description, extendedDescription string, source *cyclonedx.Service, cwe []string, severity severityutils.Severity, applicabilityStatus jasutils.ApplicabilityStatus, properties ...cyclonedx.Property) (scaVulnerability *cyclonedx.Vulnerability) {
+func GetOrCreateScaIssue(destination *cyclonedx.BOM, id, cveId, description, extendedDescription string, source *cyclonedx.Service, cwe, references []string, severity severityutils.Severity, applicabilityStatus jasutils.ApplicabilityStatus, properties ...cyclonedx.Property) (scaVulnerability *cyclonedx.Vulnerability) {
 	if scaVulnerability = SearchExistingVulnerabilityById(destination, id); scaVulnerability != nil {
 		// The vulnerability already exists, update the ratings with the applicable status and attach properties if needed
 		scaVulnerability.Ratings = getRatings(severity, applicabilityStatus)
@@ -411,12 +412,12 @@ func GetOrCreateScaIssue(destination *cyclonedx.BOM, id, cveId, description, ext
 	if destination.Vulnerabilities == nil {
 		destination.Vulnerabilities = &[]cyclonedx.Vulnerability{}
 	}
-	vulnerability := CreateBaseVulnerability(cveId, id, extendedDescription, description, source, cwe, severity, applicabilityStatus, properties...)
+	vulnerability := CreateBaseVulnerability(cveId, id, extendedDescription, description, source, cwe, references, severity, applicabilityStatus, properties...)
 	*destination.Vulnerabilities = append(*destination.Vulnerabilities, vulnerability)
 	return &(*destination.Vulnerabilities)[len(*destination.Vulnerabilities)-1]
 }
 
-func CreateBaseVulnerability(ref, id, details, description string, source *cyclonedx.Service, cwe []string, severity severityutils.Severity, applicabilityStatus jasutils.ApplicabilityStatus, properties ...cyclonedx.Property) cyclonedx.Vulnerability {
+func CreateBaseVulnerability(ref, id, details, description string, source *cyclonedx.Service, cwe, references []string, severity severityutils.Severity, applicabilityStatus jasutils.ApplicabilityStatus, properties ...cyclonedx.Property) cyclonedx.Vulnerability {
 	vuln := cyclonedx.Vulnerability{
 		BOMRef: ref,
 		ID:     id,
@@ -427,9 +428,31 @@ func CreateBaseVulnerability(ref, id, details, description string, source *cyclo
 		Description: description,
 		Detail:      details,
 		Ratings:     getRatings(severity, applicabilityStatus),
+		References:  getReferences(references),
 	}
 	vuln.Properties = AppendProperties(vuln.Properties, properties...)
 	return vuln
+}
+
+func getReferences(references []string) *[]cyclonedx.VulnerabilityReference {
+	if references == nil || len(references) == 0 {
+		return nil
+	}
+	refs := []cyclonedx.VulnerabilityReference{}
+	for _, ref := range references {
+		if ref == "" {
+			continue // Skip empty references
+		}
+		refs = append(refs, cyclonedx.VulnerabilityReference{
+			Source: &cyclonedx.Source{
+				URL: ref,
+			},
+		})
+	}
+	if len(refs) == 0 {
+		return nil // Return nil if no valid references were found
+	}
+	return &refs
 }
 
 func getRatings(severity severityutils.Severity, applicabilityStatus jasutils.ApplicabilityStatus) *[]cyclonedx.VulnerabilityRating {
