@@ -85,8 +85,11 @@ func (params *AuditParams) BomGenerator() bom.SbomGenerator {
 // When thirdPartyApplicabilityScan is true, use flatten graph to include all the dependencies in applicability scanning.
 // Only npm is supported for this flag.
 func (params *AuditParams) ShouldGetFlatTreeForApplicableScan(tech techutils.Technology) bool {
+	if params.bomGenerator == nil {
+		return false
+	}
 	// Check if bomGenerator is set to JfrogBomGenerator type, if not, return false
-	if params.bomGenerator == nil || !(params.bomGenerator.(*JfrogSourceCodeBomGenerator) != nil) {
+	if _, success := params.bomGenerator.(*JfrogSourceCodeBomGenerator); !success {
 		return false
 	}
 	return tech == techutils.Pip || (params.thirdPartyApplicabilityScan && tech == techutils.Npm)
