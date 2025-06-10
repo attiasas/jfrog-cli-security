@@ -92,7 +92,6 @@ type ScaScanResults struct {
 	// Metadata of the scan
 	Descriptors           []string `json:"descriptors,omitempty"`
 	IsMultipleRootProject *bool    `json:"is_multiple_root_project,omitempty"`
-	DirectDependencies    []string `json:"direct_dependencies,omitempty"`
 	// Sca scan results
 	XrayResults []ScanResult[services.ScanResponse] `json:"xray_scan,omitempty"`
 	// Sbom (with enriched components and CVE Vulnerabilities) of the target
