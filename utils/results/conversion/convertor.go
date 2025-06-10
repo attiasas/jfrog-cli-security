@@ -58,7 +58,13 @@ type ResultsStreamFormatParser[T interface{}] interface {
 	// Parse SCA content to the current scan target
 	ParseScaIssues(target results.ScanTarget, violations bool, scaResponse results.ScanResult[services.ScanResponse], applicableScan ...results.ScanResult[[]*sarif.Run]) error
 	ParseLicenses(target results.ScanTarget, scaResponse results.ScanResult[services.ScanResponse]) error
+
 	ParseSbom(target results.ScanTarget, sbom *cyclonedx.BOM) error
+
+	ParseSbomLicenses(target results.ScanTarget, components []cyclonedx.Component, dependencies ...cyclonedx.Dependency) error
+	ParseCVEs(target results.ScanTarget, enrichedSbom results.ScanResult[*cyclonedx.BOM], applicableScan ...results.ScanResult[[]*sarif.Run]) error
+	// Parse JFrog violations to the current scan target
+	ParseViolations(target results.ScanTarget, violations []services.Violation, applicableScan ...results.ScanResult[[]*sarif.Run]) error
 	// Parse JAS content to the current scan target
 	ParseSecrets(target results.ScanTarget, violations bool, secrets []results.ScanResult[[]*sarif.Run]) error
 	ParseIacs(target results.ScanTarget, violations bool, iacs []results.ScanResult[[]*sarif.Run]) error
@@ -124,12 +130,18 @@ func parseScaResults[T interface{}](params ResultConvertParams, parser ResultsSt
 	if targetScansResults.ScaResults == nil {
 		return
 	}
-	for _, scaResults := range targetScansResults.ScaResults.XrayResults {
-		actualTarget := getScaScanTarget(targetScansResults.ScaResults, targetScansResults.ScanTarget)
-		var applicableRuns []results.ScanResult[[]*sarif.Run]
-		if jasEntitled && targetScansResults.JasResults != nil {
-			applicableRuns = targetScansResults.JasResults.ApplicabilityScanResults
+	actualTarget := getScaScanTarget(targetScansResults.ScaResults, targetScansResults.ScanTarget)
+	var applicableRuns []results.ScanResult[[]*sarif.Run]
+	if jasEntitled && targetScansResults.JasResults != nil {
+		applicableRuns = targetScansResults.JasResults.ApplicabilityScanResults
+	}
+	if params.IncludeSbom {
+		if err = parser.ParseSbom(targetScansResults.ScanTarget, targetScansResults.ScaResults.EnrichedSbom); err != nil {
+			return
 		}
+	}
+	// Parse deprecated SCA results
+	for _, scaResults := range targetScansResults.ScaResults.XrayResults {
 		if params.IncludeVulnerabilities {
 			if err = parser.ParseScaIssues(actualTarget, false, scaResults, applicableRuns...); err != nil {
 				return
@@ -147,14 +159,39 @@ func parseScaResults[T interface{}](params ResultConvertParams, parser ResultsSt
 				}
 			}
 		}
+		// Must be called last for cyclonedxparser to be able to attach the licenses to the components
 		if params.IncludeLicenses {
 			if err = parser.ParseLicenses(actualTarget, scaResults); err != nil {
 				return
 			}
 		}
 	}
-	if params.IncludeSbom {
-		if err = parser.ParseSbom(targetScansResults.ScanTarget, targetScansResults.ScaResults.EnrichedSbom); err != nil {
+	if targetScansResults.ScaResults.EnrichedSbom == nil {
+		// If no enriched SBOM was provided, we can't parse new flow
+		return nil
+	}
+	// Parse the SCA results from the enriched SBOM
+	if params.IncludeVulnerabilities && targetScansResults.ScaResults.EnrichedSbom.Vulnerabilities != nil {
+		vulnerabilityScan := results.ScanResult[*cyclonedx.BOM]{
+			Scan:       targetScansResults.ScaResults.EnrichedSbom,
+			StatusCode: targetScansResults.ScaResults.ScanStatusCode,
+		}
+		if err = parser.ParseCVEs(actualTarget, vulnerabilityScan, applicableRuns...); err != nil {
+			return
+		}
+	}
+	if params.HasViolationContext {
+		if err = parser.ParseViolations(actualTarget, targetScansResults.ScaResults.Violations, applicableRuns...); err != nil {
+			return
+		}
+	}
+	// Must be called last for cyclonedxparser to be able to attach the licenses to the components
+	if params.IncludeLicenses && targetScansResults.ScaResults.EnrichedSbom.Components != nil {
+		dependencies := []cyclonedx.Dependency{}
+		if targetScansResults.ScaResults.EnrichedSbom.Dependencies != nil {
+			dependencies = append(dependencies, *targetScansResults.ScaResults.EnrichedSbom.Dependencies...)
+		}
+		if err = parser.ParseSbomLicenses(actualTarget, *targetScansResults.ScaResults.EnrichedSbom.Components, dependencies...); err != nil {
 			return
 		}
 	}
