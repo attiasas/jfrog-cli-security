@@ -2,7 +2,6 @@ package scangraph
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/CycloneDX/cyclonedx-go"
 	"github.com/jfrog/jfrog-cli-security/sca/runner"
@@ -24,7 +23,7 @@ type JfrogScanGraphStrategy struct {
 	threadId int
 }
 
-func copy(sgs *JfrogScanGraphStrategy) *JfrogScanGraphStrategy {
+func (sgs *JfrogScanGraphStrategy) copy() *JfrogScanGraphStrategy {
 	return &JfrogScanGraphStrategy{
 		ScanGraphParams: sgs.ScanGraphParams,
 		threadId:        sgs.threadId,
@@ -34,13 +33,13 @@ func copy(sgs *JfrogScanGraphStrategy) *JfrogScanGraphStrategy {
 // We create a new instance of JfrogScanGraphStrategy with the same parameters as the original instance.
 // We set the technology to the new instance.
 func (sgs *JfrogScanGraphStrategy) WithParams(params *scangraph.ScanGraphParams) runner.SbomScanStrategy {
-	instance := copy(sgs)
+	instance := sgs.copy()
 	instance.ScanGraphParams = *params
 	return instance
 }
 
 func (sgs *JfrogScanGraphStrategy) Parallel(threadId int) runner.SbomScanStrategy {
-	instance := copy(sgs)
+	instance := sgs.copy()
 	instance.threadId = threadId
 	return instance
 }
@@ -111,12 +110,6 @@ func (sgs *JfrogScanGraphStrategy) RunXrayDependenciesTreeScanGraph(target *cycl
 	params.XrayGraphScanParams().ScanType = services.Dependency
 	// Convert BOM to tree and set the flat dependency tree to the scan parameters to improve net performance.
 	flatDepTree, fullDepTree := results.BomToTree(target)
-	search := "github.com/open-policy-agent"
-	for i := range flatDepTree.Nodes {
-		if strings.Contains(flatDepTree.Nodes[i].Id, search) {
-			log.Debug(fmt.Sprintf("Found dependency with id '%s' in the flat dependency tree", flatDepTree.Nodes[i].Id))
-		}
-	}
 	params.XrayGraphScanParams().DependenciesGraph = flatDepTree
 	// Set Technology param
 	technology := sgs.Technology()
@@ -218,6 +211,7 @@ func setPathsForIssues(dependency *xrayClientUtils.GraphNode, issuesImpactPathsM
 	if _, exists := issuesImpactPathsMap[dependency.Id]; exists {
 		// Create a copy of pathFromRoot to avoid modifying the original slice
 		pathCopy := make([]services.ImpactPathNode, len(pathFromRoot))
+		copy(pathCopy, pathFromRoot)
 		issuesImpactPathsMap[dependency.Id] = append(issuesImpactPathsMap[dependency.Id], pathCopy)
 	}
 	for _, depChild := range dependency.Nodes {

@@ -177,7 +177,7 @@ func BomToTree(sbom *cyclonedx.BOM) (flatTree *xrayUtils.GraphNode, fullDependen
 
 func BomToFullTree(sbom *cyclonedx.BOM) (fullDependencyTrees []*xrayUtils.GraphNode) {
 	for _, rootEntry := range cdx.ReduceToRoots(sbom) {
-		currentTree := &xrayUtils.GraphNode{Id: rootEntry.Ref}
+		currentTree := &xrayUtils.GraphNode{Id: PurlToXrayComponentId(rootEntry.Ref)}
 		// Populate application tree
 		populateDepsNodeDataFromBom(currentTree, sbom)
 		// Add the tree to the output list
@@ -191,8 +191,8 @@ func populateDepsNodeDataFromBom(node *xrayUtils.GraphNode, sbom *cyclonedx.BOM)
 		// If the node is nil or has a loop, return
 		return
 	}
-	for _, dep := range cdx.GetDirectDependencies(sbom, node.Id) {
-		depNode := &xrayUtils.GraphNode{Id: dep, Parent: node}
+	for _, dep := range cdx.GetDirectDependencies(sbom, XrayComponentIdToPurl(node.Id)) {
+		depNode := &xrayUtils.GraphNode{Id: PurlToXrayComponentId(dep), Parent: node}
 		// log.Debug(fmt.Sprintf("Adding dependency node: %s to parent node: %s", depNode.Id, node.Id))
 		// Add the dependency to the current node
 		node.Nodes = append(node.Nodes, depNode)
