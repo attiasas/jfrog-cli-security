@@ -32,11 +32,11 @@ type ApplicabilityScanType string
 type ApplicabilityScanManager struct {
 	directDependenciesCves   []string
 	indirectDependenciesCves []string
-	scanner         *jas.JasScanner
-	thirdPartyScan  bool
-	commandType     string
-	configFileName  string
-	resultsFileName string
+	scanner                  *jas.JasScanner
+	thirdPartyScan           bool
+	commandType              string
+	configFileName           string
+	resultsFileName          string
 }
 
 type ContextualAnalysisScanParams struct {
@@ -79,11 +79,11 @@ func newApplicabilityScanManager(directDependenciesCves, indirectDependenciesCve
 	return &ApplicabilityScanManager{
 		directDependenciesCves:   directDependenciesCves,
 		indirectDependenciesCves: indirectDependenciesCves,
-		scanner:         scanner,
-		thirdPartyScan:  thirdPartyScan,
-		commandType:     string(scanType),
-		configFileName:  filepath.Join(scannerTempDir, "config.yaml"),
-		resultsFileName: filepath.Join(scannerTempDir, "results.sarif"),
+		scanner:                  scanner,
+		thirdPartyScan:           thirdPartyScan,
+		commandType:              string(scanType),
+		configFileName:           filepath.Join(scannerTempDir, "config.yaml"),
+		resultsFileName:          filepath.Join(scannerTempDir, "results.sarif"),
 	}
 }
 
