@@ -13,6 +13,7 @@ import (
 
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
+	"github.com/jfrog/jfrog-cli-security/utils/formats/cdx"
 	"github.com/jfrog/jfrog-cli-security/utils/formats/sarifutils"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
@@ -36,7 +37,6 @@ const (
 
 	// #nosec G101 -- Not credentials.
 	BinarySecretScannerToolName = "JFrog Binary Secrets Scanner"
-	ScaScannerToolName          = "JFrog Xray Scanner"
 )
 
 var (
@@ -162,7 +162,7 @@ func (sc *CmdResultsSarifConverter) flush() {
 }
 
 func (sc *CmdResultsSarifConverter) createScaRun(target results.ScanTarget, errorCount int) *sarif.Run {
-	run := sarif.NewRunWithInformationURI(ScaScannerToolName, utils.BaseDocumentationURL+"sca")
+	run := sarif.NewRunWithInformationURI(utils.XrayToolName, utils.BaseDocumentationURL+"sca")
 	run.Tool.Driver.Version = &sc.xrayVersion
 	wd := target.Target
 	if sc.currentCmdType.IsTargetBinary() {
@@ -189,7 +189,7 @@ func (sc *CmdResultsSarifConverter) validateBeforeParse() (err error) {
 
 func (sc *CmdResultsSarifConverter) ParseScaIssues(target results.ScanTarget, violations bool, scaResponse results.ScanResult[services.ScanResponse], applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
 	if violations {
-		if err = sc.parseScaViolations(target, scaResponse, applicableScan...); err != nil {
+		if err = sc.parseScaViolations(target, scaResponse.Scan.Violations, applicableScan...); err != nil {
 			return
 		}
 		return
@@ -200,12 +200,94 @@ func (sc *CmdResultsSarifConverter) ParseScaIssues(target results.ScanTarget, vi
 	return
 }
 
-func (sc *CmdResultsSarifConverter) parseScaViolations(target results.ScanTarget, scanResponse results.ScanResult[services.ScanResponse], applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
+func (sc *CmdResultsSarifConverter) ParseSbomLicenses(target results.ScanTarget, components []cyclonedx.Component, dependencies ...cyclonedx.Dependency) error {
+	return nil // Not supported in Sarif format
+}
+
+func (sc *CmdResultsSarifConverter) ParseCVEs(target results.ScanTarget, enrichedSbom results.ScanResult[*cyclonedx.BOM], applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
+	if err = sc.validateBeforeParse(); err != nil || sc.currentTargetConvertedRuns.scaCurrentRun == nil {
+		return
+	}
+	sarifResults := []*sarif.Result{}
+	sarifRules := map[string]*sarif.ReportingDescriptor{}
+	err = results.ForEachScaVulnerability(target, enrichedSbom.Scan, sc.entitledForJas, results.ScanResultsToRuns(applicableScan), addCdxScaVulnerability(sc.currentCmdType, enrichedSbom.Scan, &sarifResults, &sarifRules))
+	if err != nil || len(sarifRules) == 0 || len(sarifResults) == 0 {
+		return
+	}
+	sc.addScaResultsToCurrentRun(sarifRules, sarifResults...)
+	return
+}
+
+func addCdxScaVulnerability(cmdType utils.CommandType, enrichedSbom *cyclonedx.BOM, sarifResults *[]*sarif.Result, rules *map[string]*sarif.ReportingDescriptor) results.ParseBomScaVulnerabilityFunc {
+	return func(vulnerability cyclonedx.Vulnerability, component cyclonedx.Component, fixedVersion *[]cyclonedx.AffectedVersions, applicability *formats.Applicability, severity severityutils.Severity) (e error) {
+		// Prepare the required fields
+		applicabilityStatus, maxCveScore, cves, directDependencies, fixedVersions, markdownDescription, e := prepareCdxVulnerabilitiesForSarif(enrichedSbom, vulnerability, severity, applicability, component, fixedVersion)
+		if e != nil {
+			return
+		}
+		compName, compVersion, _ := cdx.SplitPackageURL(component.PackageURL)
+		currentResults, currentRule := parseScaToSarifFormat(scaParseParams{
+			CmdType:                 cmdType,
+			IssueId:                 vulnerability.ID,
+			Summary:                 vulnerability.Description,
+			MarkdownDescription:     markdownDescription,
+			CveScore:                maxCveScore,
+			GenerateTitleFunc:       getScaVulnerabilitySarifHeadline,
+			Cves:                    cves,
+			Severity:                severity,
+			ApplicabilityStatus:     applicabilityStatus,
+			ImpactedPackagesName:    compName,
+			ImpactedPackagesVersion: compVersion,
+			FixedVersions:           fixedVersions,
+			DirectComponents:        directDependencies,
+			// TODO: implement impact paths conversion from component + dependency tree + target
+			ImpactPaths: [][]formats.ComponentRow{},
+		})
+		cveImpactedComponentRuleId := results.GetScaIssueId(compName, compVersion, vulnerability.ID)
+		if _, ok := (*rules)[cveImpactedComponentRuleId]; !ok {
+			// New Rule
+			(*rules)[cveImpactedComponentRuleId] = currentRule
+		}
+		*sarifResults = append(*sarifResults, currentResults...)
+		return
+	}
+}
+
+func prepareCdxVulnerabilitiesForSarif(enrichedSbom *cyclonedx.BOM, vulnerability cyclonedx.Vulnerability, severity severityutils.Severity, applicability *formats.Applicability, component cyclonedx.Component, fixedVersion *[]cyclonedx.AffectedVersions) (applicabilityStatus jasutils.ApplicabilityStatus, maxCveScore string, cves []formats.CveRow, directDependencies []formats.ComponentRow, fixedVersions []string, markdownDescription string, err error) {
+	// Extract the applicability status
+	applicabilityStatus = jasutils.NotScanned
+	if applicability != nil {
+		applicabilityStatus = jasutils.ConvertToApplicabilityStatus(applicability.Status)
+	}
+	// Extract the CVEs
+	cves = results.CdxVulnToCveRows(vulnerability, applicability)
+	// Extract the direct dependencies
+	dependencies := []cyclonedx.Dependency{}
+	if enrichedSbom.Dependencies != nil {
+		dependencies = append(dependencies, *enrichedSbom.Dependencies...)
+	}
+	directDependencies = results.GetDirectDependenciesAsComponentRows(component, *enrichedSbom.Components, dependencies)
+	// Extract the fixed versions
+	fixedVersions = results.CdxToFixedVersions(fixedVersion)
+	// Extract the maximum CVE score
+	if maxCveScore, err = results.FindMaxCVEScore(severity, applicabilityStatus, cves); err != nil {
+		return
+	}
+	// Prepare the markdown description
+	markdownDescription, err = getScaIssueMarkdownDescription(directDependencies, maxCveScore, applicabilityStatus, fixedVersions)
+	return
+}
+
+func (sc *CmdResultsSarifConverter) ParseViolations(target results.ScanTarget, violations []services.Violation, applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
+	return sc.parseScaViolations(target, violations, applicableScan...)
+}
+
+func (sc *CmdResultsSarifConverter) parseScaViolations(target results.ScanTarget, violations []services.Violation, applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
 	if err = sc.validateBeforeParse(); err != nil || sc.currentTargetConvertedRuns.scaCurrentRun == nil {
 		return
 	}
 	// Parse violations
-	sarifResults, sarifRules, err := PrepareSarifScaViolations(sc.currentCmdType, target, scanResponse.Scan.Violations, sc.entitledForJas, results.ScanResultsToRuns(applicableScan)...)
+	sarifResults, sarifRules, err := PrepareSarifScaViolations(sc.currentCmdType, target, violations, sc.entitledForJas, results.ScanResultsToRuns(applicableScan)...)
 	if err != nil || len(sarifRules) == 0 || len(sarifResults) == 0 {
 		return
 	}
