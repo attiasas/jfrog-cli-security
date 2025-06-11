@@ -872,6 +872,7 @@ func ExtractIssuesInfoForCdx(issueId string, cves []formats.CveRow, severity sev
 }
 
 func CdxToFixedVersions(affectedVersions *[]cyclonedx.AffectedVersions) (fixedVersion []string) {
+	fixedVersion = []string{}
 	if affectedVersions == nil || len(*affectedVersions) == 0 {
 		return
 	}
@@ -886,11 +887,27 @@ func CdxToFixedVersions(affectedVersions *[]cyclonedx.AffectedVersions) (fixedVe
 func GetDirectDependenciesAsComponentRows(component cyclonedx.Component, components []cyclonedx.Component, dependencies []cyclonedx.Dependency) (directComponents []formats.ComponentRow) {
 	if parent := cdx.SearchParent(component.BOMRef, components, dependencies...); parent != nil {
 		directComponents = append(directComponents, formats.ComponentRow{
-			Name:    parent.Name,
-			Version: parent.Version,
+			Name:     parent.Name,
+			Version:  parent.Version,
+			Location: CdxEvidenceToLocation(parent.Evidence),
 		})
 	}
 	return
+}
+
+func CdxEvidenceToLocation(evidence *cyclonedx.Evidence) (location *formats.Location) {
+	if evidence == nil || evidence.Occurrences == nil || len(*evidence.Occurrences) == 0 {
+		return nil
+	}
+	// We take the first location as the main location
+	if len(*evidence.Occurrences) > 1 {
+		log.Debug("Multiple locations found for component evidence, using the first one as location")
+	}
+	loc := (*evidence.Occurrences)[0]
+	location = &formats.Location{
+		File: loc.Location,
+	}
+	return location
 }
 
 func RatingsToSeverity(ratings *[]cyclonedx.VulnerabilityRating) (severity severityutils.Severity) {

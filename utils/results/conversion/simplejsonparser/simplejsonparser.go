@@ -118,6 +118,7 @@ func (sjc *CmdResultsSimpleJsonConverter) ParseCVEs(target results.ScanTarget, e
 }
 
 func toReferences(vulnerability cyclonedx.Vulnerability) (references []string) {
+	references = []string{}
 	// If vulnerability has references, we convert them to a string slice.
 	if vulnerability.References == nil {
 		return
