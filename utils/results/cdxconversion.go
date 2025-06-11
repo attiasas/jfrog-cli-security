@@ -38,7 +38,7 @@ func ScanResponseToSbom(destination *cyclonedx.BOM, scanResponse services.ScanRe
 		if vulnerability.ExtendedInformation != nil {
 			extendedDescription = vulnerability.ExtendedInformation.FullDescription
 		}
-		cves, _, cwes, ratings := ExtractIssuesInfoForCdx(vulnerability.IssueId, convertCves(vulnerability.Cves), severity, jasutils.NotScanned)
+		cves, _, cwes, ratings := ExtractIssuesInfoForCdx(vulnerability.IssueId, convertCves(vulnerability.Cves), severity, jasutils.NotScanned, xrayService)
 		// Create vulnerability for each issueId
 		for id := 0; id < len(cves); id++ {
 			for compIndex := 0; compIndex < len(impactedPackagesIds); compIndex++ {
@@ -407,10 +407,10 @@ func BomToDirectCompIds(sbom *cyclonedx.BOM) (directDepList *[]string) {
 	return
 }
 
-func CreateSeverityRating(severity severityutils.Severity, applicabilityStatus jasutils.ApplicabilityStatus) cyclonedx.VulnerabilityRating {
+func CreateSeverityRating(severity severityutils.Severity, applicabilityStatus jasutils.ApplicabilityStatus, service *cyclonedx.Service) cyclonedx.VulnerabilityRating {
 	return cyclonedx.VulnerabilityRating{
 		Source: &cyclonedx.Source{
-			Name: utils.XrayToolName,
+			Name: service.Name,
 		},
 		Severity: severityutils.SeverityToCycloneDxSeverity(severity),
 		Score:    severityutils.GetSeverityScoreFloat64(severity, applicabilityStatus),

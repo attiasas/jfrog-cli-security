@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/CycloneDX/cyclonedx-go"
@@ -168,7 +169,7 @@ func (cdc *CmdResultsCycloneDxConverter) ParseCVEs(target results.ScanTarget, en
 				})
 				for _, evidence := range applicability.Evidence {
 					// Get or create the file component from the BOM
-					fileComponent := cdx.GetComponentByIndex(cdc.bom, cdc.getOrCreateFileComponent(getEvidenceLocation(target, evidence.File)))
+					fileComponent := cdx.GetComponentByIndex(cdc.bom, cdc.getOrCreateFileComponent(evidence.File))
 					// Attach the fileComponent evidence affects to the vulnerability and add the evidence snippet
 					addFileIssueAffects(&vulnerability, *fileComponent, cyclonedx.Property{
 						Name:  fmt.Sprintf(applicabilityEvidencePropertyTemplate, fileComponent.BOMRef, evidence.StartLine, evidence.StartColumn, evidence.EndLine, evidence.EndColumn),
@@ -192,7 +193,7 @@ func (cdc *CmdResultsCycloneDxConverter) ParseScaIssues(target results.ScanTarge
 	if cdc.bom == nil {
 		return results.ErrResetConvertor
 	}
-	source := cdc.addXrayToolIfMissing()
+	service := cdc.addXrayToolIfMissing()
 	cdc.addJasService(applicableScan)
 	err = results.ForEachScaVulnerabilities(target, scaResponse.Scan.Vulnerabilities, cdc.entitledForJas, results.ScanResultsToRuns(applicableScan),
 		func(vulnerability services.Vulnerability, cves []formats.CveRow, applicabilityStatus jasutils.ApplicabilityStatus, severity severityutils.Severity, impactedPackagesId string, fixedVersion []string, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) (e error) {
@@ -202,7 +203,7 @@ func (cdc *CmdResultsCycloneDxConverter) ParseScaIssues(target results.ScanTarge
 			if vulnerability.ExtendedInformation != nil {
 				extendedDescription = vulnerability.ExtendedInformation.FullDescription
 			}
-			cveIds, applicability, cwes, ratings := results.ExtractIssuesInfoForCdx(vulnerability.IssueId, cves, severity, applicabilityStatus)
+			cveIds, applicability, cwes, ratings := results.ExtractIssuesInfoForCdx(vulnerability.IssueId, cves, severity, applicabilityStatus, service)
 			// Create vulnerability for each issueId
 			for i := 0; i < len(cveIds); i++ {
 				actualStatus := applicabilityStatus
@@ -210,7 +211,7 @@ func (cdc *CmdResultsCycloneDxConverter) ParseScaIssues(target results.ScanTarge
 					actualStatus = jasutils.ConvertToApplicabilityStatus(applicability[i].Status)
 				}
 				// Create the SCA vulnerability
-				cycloneVulnerability := cdc.getOrCreateScaIssue(vulnerability.IssueId, cveIds[i], vulnerability.Summary, extendedDescription, source, cwes[i], vulnerability.References, actualStatus, ratings[i]...)
+				cycloneVulnerability := cdc.getOrCreateScaIssue(vulnerability.IssueId, cveIds[i], vulnerability.Summary, extendedDescription, service, cwes[i], vulnerability.References, actualStatus, ratings[i]...)
 				// Attach the affected impacted library component to the vulnerability
 				cdx.AttachComponentAffects(cycloneVulnerability, *affectedComponent, func(affectedComponent cyclonedx.Component) cyclonedx.Affects {
 					return cdx.CreateScaImpactedAffects(affectedComponent, fixedVersion)
@@ -220,7 +221,7 @@ func (cdc *CmdResultsCycloneDxConverter) ParseScaIssues(target results.ScanTarge
 				}
 				for _, evidence := range applicability[i].Evidence {
 					// Get or create the file component from the BOM
-					fileComponent := cdx.GetComponentByIndex(cdc.bom, cdc.getOrCreateFileComponent(getEvidenceLocation(target, evidence.File)))
+					fileComponent := cdx.GetComponentByIndex(cdc.bom, cdc.getOrCreateFileComponent(evidence.File))
 					// Attach the fileComponent evidence affects to the vulnerability and add the evidence snippet
 					addFileIssueAffects(cycloneVulnerability, *fileComponent, cyclonedx.Property{
 						Name:  fmt.Sprintf(applicabilityEvidencePropertyTemplate, fileComponent.BOMRef, evidence.StartLine, evidence.StartColumn, evidence.EndLine, evidence.EndColumn),
@@ -383,7 +384,7 @@ func (cdc *CmdResultsCycloneDxConverter) ParseSecrets(target results.ScanTarget,
 			}
 		}
 		// TODO: make sure with secrets team what is the CWE for secrets (212?) they should output
-		ratings := []cyclonedx.VulnerabilityRating{results.CreateSeverityRating(severity, applicabilityStatus)}
+		ratings := []cyclonedx.VulnerabilityRating{results.CreateSeverityRating(severity, applicabilityStatus, source)}
 		jasIssue := cdc.getOrCreateJasIssue(sarifutils.GetResultRuleId(result), sarifutils.GetRuleScannerId(rule), sarifutils.GetResultMsgText(result), sarifutils.GetRuleShortDescriptionText(rule), source, sarifutils.GetRuleCWE(rule), ratings)
 		// Add the location to the vulnerability
 		properties = append(properties, cyclonedx.Property{
@@ -402,10 +403,11 @@ func (cdc *CmdResultsCycloneDxConverter) addJasService(runs []results.ScanResult
 			if run == nil || run.Tool.Driver == nil {
 				continue
 			}
-			cdx.AddServiceToBomIfNotExists(cdc.bom, cyclonedx.Service{
+			service = &cyclonedx.Service{
 				Name:    run.Tool.Driver.Name,
 				Version: *run.Tool.Driver.Version,
-			})
+			}
+			cdx.AddServiceToBomIfNotExists(cdc.bom, *service)
 		}
 	}
 	return
@@ -420,7 +422,7 @@ func (cdc *CmdResultsCycloneDxConverter) ParseIacs(target results.ScanTarget, vi
 		// Create or get the affected component
 		affectedComponentIndex := cdc.getOrCreateJasComponent(location)
 		// Create a new JAS vulnerability, add it to the BOM and return it
-		ratings := []cyclonedx.VulnerabilityRating{results.CreateSeverityRating(severity, jasutils.Applicable)}
+		ratings := []cyclonedx.VulnerabilityRating{results.CreateSeverityRating(severity, jasutils.Applicable, source)}
 		jasIssue := cdc.getOrCreateJasIssue(sarifutils.GetResultRuleId(result), sarifutils.GetRuleScannerId(rule), sarifutils.GetResultMsgText(result), sarifutils.GetRuleShortDescriptionText(rule), source, sarifutils.GetRuleCWE(rule), ratings)
 		// Add the location to the vulnerability
 		affectedComponent := cdx.GetComponentByIndex(cdc.bom, affectedComponentIndex)
@@ -441,7 +443,7 @@ func (cdc *CmdResultsCycloneDxConverter) ParseSast(target results.ScanTarget, vi
 		// Create or get the affected component
 		affectedComponentIndex := cdc.getOrCreateJasComponent(location)
 		// Create a new JAS vulnerability, add it to the BOM and return it
-		ratings := []cyclonedx.VulnerabilityRating{results.CreateSeverityRating(severity, jasutils.Applicable)}
+		ratings := []cyclonedx.VulnerabilityRating{results.CreateSeverityRating(severity, jasutils.Applicable, source)}
 		jasIssue := cdc.getOrCreateJasIssue(sarifutils.GetResultRuleId(result), sarifutils.GetRuleScannerId(rule), sarifutils.GetResultMsgText(result), sarifutils.GetRuleShortDescriptionText(rule), source, sarifutils.GetRuleCWE(rule), ratings)
 		// Add the location to the vulnerability
 		affectedComponent := cdx.GetComponentByIndex(cdc.bom, affectedComponentIndex)
@@ -472,6 +474,9 @@ func (cdc *CmdResultsCycloneDxConverter) getOrCreateJasComponent(location *sarif
 }
 
 func (cdc *CmdResultsCycloneDxConverter) getOrCreateFileComponent(filePathOrUri string) (componentIndex int) {
+	// Convert to relative path if the filePathOrUri is absolute
+	filePathOrUri = strings.TrimPrefix(strings.TrimPrefix(filePathOrUri, "file:///"), strings.TrimPrefix(cdc.bom.Metadata.Component.Name, "/"))
+
 	// Check if the component already exists in the BOM
 	if componentIndex = cdx.GetComponentIndex(cdc.bom, cdx.GetFileRef(filePathOrUri)); componentIndex >= 0 {
 		return

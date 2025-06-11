@@ -6,7 +6,6 @@ import (
 	"path/filepath"
 	"regexp"
 	"strconv"
-	"strings"
 
 	"github.com/CycloneDX/cyclonedx-go"
 	"github.com/package-url/packageurl-go"
@@ -124,9 +123,6 @@ func CreateFileOrDirComponent(filePathOrUri string) (component cyclonedx.Compone
 }
 
 func convertToFileUrlIfNeeded(location string) string {
-	if !strings.HasPrefix(location, "file://") {
-		return "file://" + filepath.ToSlash(location)
-	}
 	return filepath.ToSlash(location)
 }
 

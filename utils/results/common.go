@@ -844,10 +844,10 @@ func SearchTargetResultsByPath(target string, resultsToCompare *SecurityCommandR
 	return best
 }
 
-func ExtractIssuesInfoForCdx(issueId string, cves []formats.CveRow, severity severityutils.Severity, applicabilityStatus jasutils.ApplicabilityStatus) (cveIds []string, statuses []*formats.Applicability, cwe [][]string, ratings [][]cyclonedx.VulnerabilityRating) {
+func ExtractIssuesInfoForCdx(issueId string, cves []formats.CveRow, severity severityutils.Severity, applicabilityStatus jasutils.ApplicabilityStatus, service *cyclonedx.Service) (cveIds []string, statuses []*formats.Applicability, cwe [][]string, ratings [][]cyclonedx.VulnerabilityRating) {
 	if len(cves) == 0 {
 		cveIds = append(cveIds, issueId)
-		ratings = [][]cyclonedx.VulnerabilityRating{{CreateSeverityRating(severity, applicabilityStatus)}}
+		ratings = [][]cyclonedx.VulnerabilityRating{{CreateSeverityRating(severity, applicabilityStatus, service)}}
 		if applicabilityStatus != jasutils.NotScanned {
 			statuses = []*formats.Applicability{{Status: string(applicabilityStatus)}}
 		} else {
@@ -859,7 +859,7 @@ func ExtractIssuesInfoForCdx(issueId string, cves []formats.CveRow, severity sev
 	for _, cve := range cves {
 		cveIds = append(cveIds, cve.Id)
 		cwe = append(cwe, cve.Cwe)
-		ratings = append(ratings, append(CreateCveRatings(cve), CreateSeverityRating(severity, applicabilityStatus)))
+		ratings = append(ratings, append(CreateCveRatings(cve), CreateSeverityRating(severity, applicabilityStatus, service)))
 		if cve.Applicability != nil {
 			statuses = append(statuses, cve.Applicability)
 		} else if applicabilityStatus != jasutils.NotScanned {
