@@ -431,25 +431,29 @@ func AuditCmd(c *components.Context) error {
 }
 
 func getBomGenerator(c *components.Context) (bom.SbomGenerator, error) {
-	switch strings.ToLower(c.GetStringFlagValue(flags.BomGenerator)) {
-	case "buildinfo":
-		return &audit.JfrogSourceCodeBomGenerator{}, nil
-		// return &buildinfo.BuildInfoBomGenerator{}, nil
-	case "scang":
-		return &scang.ScangBomGenerator{}, nil
-	default:
-		return nil, fmt.Errorf("unknown BOM generator: %s", c.GetStringFlagValue(flags.BomGenerator))
-	}
+	return &scang.ScangBomGenerator{ BinaryPath: c.GetStringFlagValue(flags.ScangBinary) }, nil
+
+	// switch strings.ToLower(c.GetStringFlagValue(flags.BomGenerator)) {
+	// case "buildinfo":
+	// 	return &audit.JfrogSourceCodeBomGenerator{}, nil
+	// 	// return &buildinfo.BuildInfoBomGenerator{}, nil
+	// case "scang":
+	// 	return &scang.ScangBomGenerator{}, nil
+	// default:
+	// 	return nil, fmt.Errorf("unknown BOM generator: %s", c.GetStringFlagValue(flags.BomGenerator))
+	// }
 }
 
 func getScaScanStrategy(c *components.Context) (runner.SbomScanStrategy, error) {
-	switch strings.ToLower(c.GetStringFlagValue(flags.BomGenerator)) {
-	case "buildinfo":
-		return &jfrogScanGraph.JfrogScanGraphStrategy{}, nil
-	case "scang":
-		return &enrichScan.EnrichScanStrategy{}, nil
-	}
-	return nil, fmt.Errorf("unknown SCA scan strategy: %s", c.GetStringFlagValue(flags.BomGenerator))
+	return &enrichScan.EnrichScanStrategy{}, nil
+
+	// switch strings.ToLower(c.GetStringFlagValue(flags.BomGenerator)) {
+	// case "buildinfo":
+	// 	return &jfrogScanGraph.JfrogScanGraphStrategy{}, nil
+	// case "scang":
+	// 	return &enrichScan.EnrichScanStrategy{}, nil
+	// }
+	// return nil, fmt.Errorf("unknown SCA scan strategy: %s", c.GetStringFlagValue(flags.BomGenerator))
 }
 
 func CreateAuditCmd(c *components.Context) (string, string, *coreConfig.ServerDetails, *audit.AuditCommand, error) {

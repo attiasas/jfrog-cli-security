@@ -2,6 +2,7 @@ package scang
 
 import (
 	"fmt"
+	"os/exec"
 	"path/filepath"
 
 	"github.com/CycloneDX/cyclonedx-go"
@@ -44,14 +45,11 @@ func GetDefaultScangExecutable() (scangPath string, err error) {
 		return "", err
 	}
 	scangPath = filepath.Join(jfrogDir, PluginName, GetScangExecutableName())
-	var exists bool
-	if exists, err = fileutils.IsFileExists(scangPath, false); err != nil {
+	exists, err := fileutils.IsFileExists(scangPath, false)
+	if err != nil || exists {
 		return
 	}
-	if !exists {
-		err = fmt.Errorf("unable to locate the scang executable at %s.", scangPath)
-	}
-	return
+	return exec.LookPath("scang")
 }
 
 func (sbg *ScangBomGenerator) GenerateSbom(target results.ScanTarget) (sbom *cyclonedx.BOM, err error) {
@@ -62,6 +60,12 @@ func (sbg *ScangBomGenerator) GenerateSbom(target results.ScanTarget) (sbom *cyc
 		if err != nil {
 			return nil, fmt.Errorf("failed to get scang executable: %w", err)
 		}
+	}
+	exists, err := fileutils.IsFileExists(sbg.BinaryPath, false)
+	if err != nil {
+		return
+	} else if !exists {
+		err = fmt.Errorf("unable to locate the scang executable at %s.", sbg.BinaryPath)
 	}
 	// Run the scang command to generate the SBOM
 	if sbom, err = sbg.executeScanner(sbg.BinaryPath, target); err != nil {
