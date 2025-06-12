@@ -122,7 +122,7 @@ func getDataFromNode(node *xrayUtils.GraphNode, parsed *datastructures.Set[strin
 func getNodeDirectDependencies(node *xrayUtils.GraphNode) (dependencies *[]string) {
 	dependencies = &[]string{}
 	for _, dep := range node.Nodes {
-		*dependencies = append(*dependencies, XrayComponentIdToPurl(dep.Id))
+		*dependencies = append(*dependencies, XrayComponentIdToCdxComponentRef(dep.Id))
 	}
 	return
 }
@@ -172,18 +172,38 @@ func getNodeDirectBinaryComponents(node *xrayUtils.BinaryGraphNode) (dependencie
 }
 
 func BomToTree(sbom *cyclonedx.BOM) (flatTree *xrayUtils.GraphNode, fullDependencyTrees []*xrayUtils.GraphNode) {
-	return BomToFlatTree(sbom), BomToFullTree(sbom)
+	return BomToFlatTree(sbom), BomToFullTree(sbom, false)
 }
 
-func BomToFullTree(sbom *cyclonedx.BOM) (fullDependencyTrees []*xrayUtils.GraphNode) {
+func BomToFullTree(sbom *cyclonedx.BOM, isBuildInfoXray bool) (fullDependencyTrees []*xrayUtils.GraphNode) {
 	for _, rootEntry := range cdx.ReduceToRoots(sbom) {
-		currentTree := &xrayUtils.GraphNode{Id: PurlToXrayComponentId(cdx.SearchComponentByRef(rootEntry.Ref, *sbom.Components...).PackageURL)}
+		// Create a new GraphNode with ref as the ID
+		currentTree := &xrayUtils.GraphNode{Id: rootEntry.Ref}
 		// Populate application tree
 		populateDepsNodeDataFromBom(currentTree, sbom)
 		// Add the tree to the output list
 		fullDependencyTrees = append(fullDependencyTrees, currentTree)
 	}
+	// Translate refs to IDs
+	for _, node := range fullDependencyTrees {
+		convertRefsToPackageID(node, isBuildInfoXray, *sbom.Components...)
+	}
 	return
+}
+
+func convertRefsToPackageID(node *xrayUtils.GraphNode, isBuildInfoXray bool, components ...cyclonedx.Component) {
+	if node == nil {
+		return
+	}
+	if component := cdx.SearchComponentByRef(node.Id, components...); component != nil {
+		node.Id = component.PackageURL
+		if isBuildInfoXray {
+			node.Id = PurlToXrayComponentId(node.Id)
+		}
+	}
+	for _, dep := range node.Nodes {
+		convertRefsToPackageID(dep, isBuildInfoXray, components...)
+	}
 }
 
 func populateDepsNodeDataFromBom(node *xrayUtils.GraphNode, sbom *cyclonedx.BOM) {
@@ -191,9 +211,8 @@ func populateDepsNodeDataFromBom(node *xrayUtils.GraphNode, sbom *cyclonedx.BOM)
 		// If the node is nil or has a loop, return
 		return
 	}
-	for _, dep := range cdx.GetDirectDependencies(sbom, XrayComponentIdToPurl(node.Id)) {
-		depNode := &xrayUtils.GraphNode{Id: PurlToXrayComponentId(dep), Parent: node}
-		// log.Debug(fmt.Sprintf("Adding dependency node: %s to parent node: %s", depNode.Id, node.Id))
+	for _, dep := range cdx.GetDirectDependencies(sbom, node.Id) {
+		depNode := &xrayUtils.GraphNode{Id: dep, Parent: node}
 		// Add the dependency to the current node
 		node.Nodes = append(node.Nodes, depNode)
 		// Recursively populate the node data
@@ -201,7 +220,7 @@ func populateDepsNodeDataFromBom(node *xrayUtils.GraphNode, sbom *cyclonedx.BOM)
 	}
 }
 
-func BomToFullCompTree(sbom *cyclonedx.BOM) (fullDependencyTree *xrayUtils.BinaryGraphNode) {
+func BomToFullCompTree(sbom *cyclonedx.BOM, isBuildInfoXray bool) (fullDependencyTree *xrayUtils.BinaryGraphNode) {
 	fullDependencyTrees := []*xrayUtils.BinaryGraphNode{}
 	for _, rootEntry := range cdx.ReduceToRoots(sbom) {
 		currentTree := toBinaryNode(sbom, rootEntry.Ref)
@@ -221,11 +240,27 @@ func BomToFullCompTree(sbom *cyclonedx.BOM) (fullDependencyTree *xrayUtils.Binar
 		}
 		fullDependencyTree = &xrayUtils.BinaryGraphNode{Id: id, Nodes: fullDependencyTrees}
 	}
+	convertBinaryRefsToPackageID(fullDependencyTree, isBuildInfoXray, *sbom.Components...)
 	return
 }
 
+func convertBinaryRefsToPackageID(node *xrayUtils.BinaryGraphNode, isBuildInfoXray bool, components ...cyclonedx.Component) {
+	if node == nil {
+		return
+	}
+	if component := cdx.SearchComponentByRef(node.Id, components...); component != nil {
+		node.Id = component.PackageURL
+		if isBuildInfoXray {
+			node.Id = PurlToXrayComponentId(node.Id)
+		}
+	}
+	for _, dep := range node.Nodes {
+		convertBinaryRefsToPackageID(dep, isBuildInfoXray, components...)
+	}
+}
+
 func populateCompsNodeDataFromBom(node *xrayUtils.BinaryGraphNode, sbom *cyclonedx.BOM) {
-	for _, depRef := range cdx.GetDirectDependencies(sbom, XrayComponentIdToPurl(node.Id)) {
+	for _, depRef := range cdx.GetDirectDependencies(sbom, node.Id) {
 		depNode := toBinaryNode(sbom, depRef)
 		// Add the dependency to the current node
 		node.Nodes = append(node.Nodes, depNode)
@@ -235,16 +270,13 @@ func populateCompsNodeDataFromBom(node *xrayUtils.BinaryGraphNode, sbom *cyclone
 }
 
 func toBinaryNode(sbom *cyclonedx.BOM, ref string) *xrayUtils.BinaryGraphNode {
-	component := cdx.GetComponent(sbom, ref)
+	component := cdx.SearchComponentByRef(ref, *sbom.Components...)
 	if component == nil {
-		return nil
-	}
-	if component.Type != cyclonedx.ComponentTypeLibrary {
-		// We are only interested in libraries for the dependency tree
+		log.Debug("Binary Component with ref %s not found in SBOM, skipping.", ref)
 		return nil
 	}
 	// Create a new BinaryGraphNode and set its ID
-	node := &xrayUtils.BinaryGraphNode{Id: PurlToXrayComponentId(component.PackageURL)}
+	node := &xrayUtils.BinaryGraphNode{Id: component.BOMRef}
 	if component.Licenses != nil {
 		// Add the licenses to the node
 		for _, license := range *component.Licenses {

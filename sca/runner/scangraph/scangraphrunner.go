@@ -89,7 +89,7 @@ func (sgs *JfrogScanGraphStrategy) RunXrayBinaryTreeScanGraph(target *cyclonedx.
 	params := &sgs.ScanGraphParams
 	params.XrayGraphScanParams().ScanType = services.Binary
 	// Convert BOM to tree and set to scan it
-	fullCompTree := results.BomToFullCompTree(target)
+	fullCompTree := results.BomToFullCompTree(target, true)
 	params.XrayGraphScanParams().BinaryGraph = fullCompTree
 	// Scan
 	xrayManager, err := xray.CreateXrayServiceManager(params.ServerDetails(), xray.WithScopedProjectKey(params.XrayGraphScanParams().ProjectKey))
