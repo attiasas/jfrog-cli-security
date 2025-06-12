@@ -10,7 +10,7 @@ import (
 	goplugin "github.com/hashicorp/go-plugin"
 )
 
-const PluginName = "scang"
+const pluginName = "scang"
 
 var ScagnMagicCookie = "scang-plugin-v1"
 
@@ -54,7 +54,7 @@ func CreateScannerPluginClient(scangBinary string) (scanner Scanner, err error) 
 	// Create the plugin client
 	client := goplugin.NewClient(&goplugin.ClientConfig{
 		HandshakeConfig: PluginHandshakeConfig,
-		Plugins:         map[string]goplugin.Plugin{PluginName: &Plugin{}},
+		Plugins:         map[string]goplugin.Plugin{pluginName: &Plugin{}},
 		Cmd:             &exec.Cmd{Path: scangBinary},
 		Managed:         true,
 	})
@@ -68,7 +68,7 @@ func CreateScannerPluginClient(scangBinary string) (scanner Scanner, err error) 
 		return nil, err
 	}
 	// Wait for the plugin to complete the handshake
-	raw, err := rpcClient.Dispense(PluginName)
+	raw, err := rpcClient.Dispense(pluginName)
 	if err != nil {
 		return nil, err
 	}

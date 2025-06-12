@@ -19,6 +19,8 @@ import (
 	"github.com/jfrog/jfrog-client-go/utils/log"
 )
 
+const PluginName = "scangplugin"
+
 type ScangBomGenerator struct {
 	BinaryPath string
 	theadId    int
@@ -44,12 +46,12 @@ func GetDefaultScangExecutable() (scangPath string, err error) {
 	if err != nil {
 		return "", err
 	}
-	scangPath = filepath.Join(jfrogDir, PluginName, GetScangExecutableName())
+	scangPath = filepath.Join(jfrogDir, pluginName, GetScangExecutableName())
 	exists, err := fileutils.IsFileExists(scangPath, false)
 	if err != nil || exists {
 		return
 	}
-	return exec.LookPath("scang")
+	return exec.LookPath(PluginName)
 }
 
 func (sbg *ScangBomGenerator) GenerateSbom(target results.ScanTarget) (sbom *cyclonedx.BOM, err error) {
