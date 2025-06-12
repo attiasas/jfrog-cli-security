@@ -87,6 +87,10 @@ func ToPackageUrl(compName, version, packageType string, properties ...cyclonedx
 	return
 }
 
+func ToPackageRef(compName, version, packageType string) (output string) {
+	return fmt.Sprintf("%s:%s@%s", packageType, compName, version)
+}
+
 func AppendProperties(properties *[]cyclonedx.Property, newProperties ...cyclonedx.Property) *[]cyclonedx.Property {
 	for _, property := range newProperties {
 		// Check if the property already exists

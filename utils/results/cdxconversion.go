@@ -177,7 +177,7 @@ func BomToTree(sbom *cyclonedx.BOM) (flatTree *xrayUtils.GraphNode, fullDependen
 
 func BomToFullTree(sbom *cyclonedx.BOM) (fullDependencyTrees []*xrayUtils.GraphNode) {
 	for _, rootEntry := range cdx.ReduceToRoots(sbom) {
-		currentTree := &xrayUtils.GraphNode{Id: PurlToXrayComponentId(rootEntry.Ref)}
+		currentTree := &xrayUtils.GraphNode{Id: PurlToXrayComponentId(cdx.SearchComponentByRef(rootEntry.Ref, *sbom.Components...).PackageURL)}
 		// Populate application tree
 		populateDepsNodeDataFromBom(currentTree, sbom)
 		// Add the tree to the output list
@@ -382,7 +382,7 @@ func XrayComponentIdToPurl(xrayComponentId string) (purl string) {
 
 func XrayComponentIdToCdxComponentRef(xrayImpactedPackageId string) string {
 	compName, compVersion, compType := techutils.SplitComponentIdRaw(xrayImpactedPackageId)
-	return cdx.ToPackageUrl(compName, compVersion, techutils.ToCdxPackageType(compType))
+	return cdx.ToPackageRef(compName, compVersion, techutils.ToCdxPackageType(compType))
 }
 
 func BomToDirectCompIds(sbom *cyclonedx.BOM) (directDepList *[]string) {
