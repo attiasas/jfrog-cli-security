@@ -33,6 +33,7 @@ const (
 	secretValidationMetadataPropertyTemplate = "jfrog:secret-validation:metadata:" + locationIdTemplate
 
 	applicabilityStatusPropertyName       = "jfrog:contextual-analysis:status"
+	applicabilityEvidenceReasonPropertyTemplate       = "jfrog:contextual-analysis:evidence:reason:" + locationIdTemplate
 	applicabilityEvidencePropertyTemplate = "jfrog:contextual-analysis:evidence:" + locationIdTemplate
 )
 
@@ -171,10 +172,16 @@ func (cdc *CmdResultsCycloneDxConverter) ParseCVEs(target results.ScanTarget, en
 					// Get or create the file component from the BOM
 					fileComponent := cdx.GetComponentByIndex(cdc.bom, cdc.getOrCreateFileComponent(evidence.File))
 					// Attach the fileComponent evidence affects to the vulnerability and add the evidence snippet
-					addFileIssueAffects(&vulnerability, *fileComponent, cyclonedx.Property{
-						Name:  fmt.Sprintf(applicabilityEvidencePropertyTemplate, fileComponent.BOMRef, evidence.StartLine, evidence.StartColumn, evidence.EndLine, evidence.EndColumn),
-						Value: evidence.Snippet,
-					})
+					addFileIssueAffects(&vulnerability, *fileComponent, 
+						cyclonedx.Property{
+							Name:  fmt.Sprintf(applicabilityEvidencePropertyTemplate, fileComponent.BOMRef, evidence.StartLine, evidence.StartColumn, evidence.EndLine, evidence.EndColumn),
+							Value: evidence.Snippet,
+						},
+						cyclonedx.Property{
+							Name:  fmt.Sprintf(applicabilityEvidenceReasonPropertyTemplate, fileComponent.BOMRef, evidence.StartLine, evidence.StartColumn, evidence.EndLine, evidence.EndColumn),
+							Value: evidence.Reason,
+						},
+					)
 				}
 			}
 			*cdc.bom.Vulnerabilities = append(*cdc.bom.Vulnerabilities, vulnerability)
@@ -223,10 +230,16 @@ func (cdc *CmdResultsCycloneDxConverter) ParseScaIssues(target results.ScanTarge
 					// Get or create the file component from the BOM
 					fileComponent := cdx.GetComponentByIndex(cdc.bom, cdc.getOrCreateFileComponent(evidence.File))
 					// Attach the fileComponent evidence affects to the vulnerability and add the evidence snippet
-					addFileIssueAffects(cycloneVulnerability, *fileComponent, cyclonedx.Property{
-						Name:  fmt.Sprintf(applicabilityEvidencePropertyTemplate, fileComponent.BOMRef, evidence.StartLine, evidence.StartColumn, evidence.EndLine, evidence.EndColumn),
-						Value: evidence.Snippet,
-					})
+					addFileIssueAffects(cycloneVulnerability, *fileComponent, 
+						cyclonedx.Property{
+							Name:  fmt.Sprintf(applicabilityEvidencePropertyTemplate, fileComponent.BOMRef, evidence.StartLine, evidence.StartColumn, evidence.EndLine, evidence.EndColumn),
+							Value: evidence.Snippet,
+						},
+						cyclonedx.Property{
+							Name:  fmt.Sprintf(applicabilityEvidenceReasonPropertyTemplate, fileComponent.BOMRef, evidence.StartLine, evidence.StartColumn, evidence.EndLine, evidence.EndColumn),
+							Value: evidence.Reason,
+						},
+					)
 				}
 			}
 			return
