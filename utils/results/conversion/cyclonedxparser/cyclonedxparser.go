@@ -163,7 +163,10 @@ func (cdc *CmdResultsCycloneDxConverter) ParseCVEs(target results.ScanTarget, en
 				cdc.bom.Vulnerabilities = &[]cyclonedx.Vulnerability{}
 			}
 			if applicability != nil && applicability.Status != "" {
-				// Add applicability status to the vulnerability
+				// Add applicability to the vulnerability
+				if vulnerability.Analysis == nil {
+					vulnerability.Analysis = getVulnerabilityAnalysis(applicability)
+				}
 				vulnerability.Properties = cdx.AppendProperties(vulnerability.Properties, cyclonedx.Property{
 					Name:  applicabilityStatusPropertyName,
 					Value: applicability.Status,
@@ -189,6 +192,19 @@ func (cdc *CmdResultsCycloneDxConverter) ParseCVEs(target results.ScanTarget, en
 		},
 	)
 	return
+}
+
+func getVulnerabilityAnalysis(applicability *formats.Applicability) *cyclonedx.VulnerabilityAnalysis {
+	state := jasutils.ApplicabilityStatusToImpactAnalysisState(jasutils.ConvertToApplicabilityStatus(applicability.Status))
+	if state == nil {
+		// No specific impact analysis state, return nil
+		return nil
+	}
+	// Create a new vulnerability analysis with the applicability status
+	return &cyclonedx.VulnerabilityAnalysis{
+		State: *state,
+		Detail: applicability.ScannerDescription,
+	}
 }
 
 func (cdc *CmdResultsCycloneDxConverter) ParseViolations(target results.ScanTarget, violations []services.Violation, applicableScan ...results.ScanResult[[]*sarif.Run]) error {
