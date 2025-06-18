@@ -195,15 +195,22 @@ func (cdc *CmdResultsCycloneDxConverter) ParseCVEs(target results.ScanTarget, en
 }
 
 func getVulnerabilityAnalysis(applicability *formats.Applicability) *cyclonedx.VulnerabilityAnalysis {
-	state := jasutils.ApplicabilityStatusToImpactAnalysisState(jasutils.ConvertToApplicabilityStatus(applicability.Status))
+	status := jasutils.ConvertToApplicabilityStatus(applicability.Status)
+	state := jasutils.ApplicabilityStatusToImpactAnalysisState(status)
 	if state == nil {
 		// No specific impact analysis state, return nil
 		return nil
+	}
+	// Add justification if the status is NotApplicable
+	var justification cyclonedx.ImpactAnalysisJustification
+	if status == jasutils.NotApplicable {
+		justification = cyclonedx.IAJCodeNotReachable
 	}
 	// Create a new vulnerability analysis with the applicability status
 	return &cyclonedx.VulnerabilityAnalysis{
 		State: *state,
 		Detail: applicability.ScannerDescription,
+		Justification: justification,
 	}
 }
 
