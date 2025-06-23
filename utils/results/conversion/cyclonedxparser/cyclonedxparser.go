@@ -32,9 +32,9 @@ const (
 	secretValidationPropertyTemplate         = "jfrog:secret-validation:status:" + locationIdTemplate
 	secretValidationMetadataPropertyTemplate = "jfrog:secret-validation:metadata:" + locationIdTemplate
 
-	applicabilityStatusPropertyName       = "jfrog:contextual-analysis:status"
-	applicabilityEvidenceReasonPropertyTemplate       = "jfrog:contextual-analysis:evidence:reason:" + locationIdTemplate
-	applicabilityEvidencePropertyTemplate = "jfrog:contextual-analysis:evidence:" + locationIdTemplate
+	applicabilityStatusPropertyName             = "jfrog:contextual-analysis:status"
+	applicabilityEvidenceReasonPropertyTemplate = "jfrog:contextual-analysis:evidence:reason:" + locationIdTemplate
+	applicabilityEvidencePropertyTemplate       = "jfrog:contextual-analysis:evidence:" + locationIdTemplate
 )
 
 type CmdResultsCycloneDxConverter struct {
@@ -146,7 +146,16 @@ func (cdc *CmdResultsCycloneDxConverter) ParseCVEs(target results.ScanTarget, en
 	source := cdc.addXrayToolIfMissing()
 	cdc.addJasService(applicableScan)
 	err = results.ForEachScaVulnerability(target, enrichedSbom.Scan, cdc.entitledForJas, results.ScanResultsToRuns(applicableScan),
-		func(vulnerability cyclonedx.Vulnerability, component cyclonedx.Component, fixedVersion *[]cyclonedx.AffectedVersions, applicability *formats.Applicability, severity severityutils.Severity) (e error) {
+		func(vulnToParse cyclonedx.Vulnerability, component cyclonedx.Component, fixedVersion *[]cyclonedx.AffectedVersions, applicability *formats.Applicability, severity severityutils.Severity) (e error) {
+			vulnerability := cdx.SearchExistingVulnerabilityById(cdc.bom, vulnToParse.BOMRef)
+			if vulnerability == nil {
+				// Add the vulnerability to the BOM
+				if cdc.bom.Vulnerabilities == nil {
+					cdc.bom.Vulnerabilities = &[]cyclonedx.Vulnerability{}
+				}
+				*cdc.bom.Vulnerabilities = append(*cdc.bom.Vulnerabilities, vulnToParse)
+				vulnerability = &(*cdc.bom.Vulnerabilities)[len(*cdc.bom.Vulnerabilities)-1]
+			}
 			if vulnerability.Source == nil {
 				vulnerability.Source = &cyclonedx.Source{Name: source.Name}
 			}
@@ -157,10 +166,6 @@ func (cdc *CmdResultsCycloneDxConverter) ParseCVEs(target results.ScanTarget, en
 			if sbomComponent := cdx.SearchComponentByRef(component.BOMRef, *cdc.bom.Components...); sbomComponent == nil {
 				// The component is not in the BOM, add it
 				*cdc.bom.Components = append(*cdc.bom.Components, component)
-			}
-			// Add the vulnerability to the BOM
-			if cdc.bom.Vulnerabilities == nil {
-				cdc.bom.Vulnerabilities = &[]cyclonedx.Vulnerability{}
 			}
 			if applicability != nil && applicability.Status != "" {
 				// Add applicability to the vulnerability
@@ -175,7 +180,7 @@ func (cdc *CmdResultsCycloneDxConverter) ParseCVEs(target results.ScanTarget, en
 					// Get or create the file component from the BOM
 					fileComponent := cdx.GetComponentByIndex(cdc.bom, cdc.getOrCreateFileComponent(evidence.File))
 					// Attach the fileComponent evidence affects to the vulnerability and add the evidence snippet
-					addFileIssueAffects(&vulnerability, *fileComponent, 
+					addFileIssueAffects(vulnerability, *fileComponent,
 						cyclonedx.Property{
 							Name:  fmt.Sprintf(applicabilityEvidencePropertyTemplate, fileComponent.BOMRef, evidence.StartLine, evidence.StartColumn, evidence.EndLine, evidence.EndColumn),
 							Value: evidence.Snippet,
@@ -187,7 +192,6 @@ func (cdc *CmdResultsCycloneDxConverter) ParseCVEs(target results.ScanTarget, en
 					)
 				}
 			}
-			*cdc.bom.Vulnerabilities = append(*cdc.bom.Vulnerabilities, vulnerability)
 			return
 		},
 	)
@@ -208,8 +212,8 @@ func getVulnerabilityAnalysis(applicability *formats.Applicability) *cyclonedx.V
 	}
 	// Create a new vulnerability analysis with the applicability status
 	return &cyclonedx.VulnerabilityAnalysis{
-		State: *state,
-		Detail: applicability.ScannerDescription,
+		State:         *state,
+		Detail:        applicability.ScannerDescription,
 		Justification: justification,
 	}
 }
@@ -253,7 +257,7 @@ func (cdc *CmdResultsCycloneDxConverter) ParseScaIssues(target results.ScanTarge
 					// Get or create the file component from the BOM
 					fileComponent := cdx.GetComponentByIndex(cdc.bom, cdc.getOrCreateFileComponent(evidence.File))
 					// Attach the fileComponent evidence affects to the vulnerability and add the evidence snippet
-					addFileIssueAffects(cycloneVulnerability, *fileComponent, 
+					addFileIssueAffects(cycloneVulnerability, *fileComponent,
 						cyclonedx.Property{
 							Name:  fmt.Sprintf(applicabilityEvidencePropertyTemplate, fileComponent.BOMRef, evidence.StartLine, evidence.StartColumn, evidence.EndLine, evidence.EndColumn),
 							Value: evidence.Snippet,

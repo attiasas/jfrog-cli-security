@@ -431,7 +431,7 @@ func AuditCmd(c *components.Context) error {
 }
 
 func getBomGenerator(c *components.Context) (bom.SbomGenerator, error) {
-	return &scang.ScangBomGenerator{ BinaryPath: c.GetStringFlagValue(flags.ScangBinary) }, nil
+	return &scang.ScangBomGenerator{BinaryPath: c.GetStringFlagValue(flags.ScangBinary)}, nil
 
 	// switch strings.ToLower(c.GetStringFlagValue(flags.BomGenerator)) {
 	// case "buildinfo":

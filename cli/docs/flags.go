@@ -131,7 +131,7 @@ const (
 	SkipAutoInstall              = "skip-auto-install"
 	AllowPartialResults          = "allow-partial-results"
 	BomGenerator                 = "bom-generator"
-	ScangBinary 			     = "scang-binary-path"
+	ScangBinary                  = "scang-binary-path"
 
 	// Unique curation flags
 	CurationOutput = "curation-format"
@@ -242,7 +242,7 @@ var flagsMap = map[string]components.Flag{
 	Licenses:      components.NewBoolFlag(Licenses, "Set if you'd also like the list of licenses to be displayed."),
 	Sbom:          components.NewBoolFlag(Sbom, fmt.Sprintf("For displaying the SBOM for this project, set to true. Relevant only with --%s flag. Ignored if provided 'format' is not 'table'.", Sca)),
 	BomGenerator:  components.NewStringFlag(BomGenerator, "Defines the SBOM generator to use. Acceptable values are: buildinfo, scang.", components.SetHiddenStrFlag(), components.WithStrDefaultValue("buildinfo")),
-	ScangBinary: components.NewStringFlag(ScangBinary, "Path to the scang executable. If not provided, the command will try to find it in the JFrog CLI dependencies directory. or in $PATH"),
+	ScangBinary:   components.NewStringFlag(ScangBinary, "Path to the scang executable. If not provided, the command will try to find it in the JFrog CLI dependencies directory. or in $PATH"),
 	OutputFormat: components.NewStringFlag(
 		OutputFormat,
 		"Defines the output format of the command. Acceptable values are: table, json, simple-json and sarif. Note: the json format doesn't include information about scans that are included as part of the Advanced Security package.",

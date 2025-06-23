@@ -438,9 +438,9 @@ func SearchExistingVulnerabilityById(destination *cyclonedx.BOM, id string) *cyc
 	if destination == nil || destination.Vulnerabilities == nil {
 		return nil
 	}
-	for _, vulnerability := range *destination.Vulnerabilities {
-		if vulnerability.BOMRef == id {
-			return &vulnerability
+	for i := range *destination.Vulnerabilities {
+		if (*destination.Vulnerabilities)[i].BOMRef == id {
+			return &(*destination.Vulnerabilities)[i]
 		}
 	}
 	return nil
