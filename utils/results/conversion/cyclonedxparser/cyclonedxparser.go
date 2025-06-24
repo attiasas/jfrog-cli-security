@@ -38,11 +38,11 @@ const (
 )
 
 type CmdResultsCycloneDxConverter struct {
-	bom     *cyclonedx.BOM
-	cmdType utils.CommandType
-
-	xrayVersion    string
-	entitledForJas bool
+	bom              *cyclonedx.BOM
+	cmdType          utils.CommandType
+	targetsComponent map[string]cyclonedx.Component
+	xrayVersion      string
+	entitledForJas   bool
 	// Include vulnerabilities/violations in the output
 	includeVulnerabilities bool
 	hasViolationContext    bool
@@ -52,11 +52,13 @@ func NewCmdResultsCycloneDxConverter(includeVulnerabilities, hasViolationContext
 	return &CmdResultsCycloneDxConverter{includeVulnerabilities: includeVulnerabilities, hasViolationContext: hasViolationContext}
 }
 
-func (cdc *CmdResultsCycloneDxConverter) Get() (*cyclonedx.BOM, error) {
+func (cdc *CmdResultsCycloneDxConverter) Get() (bom *cyclonedx.BOM, err error) {
 	if cdc.bom == nil {
 		return cyclonedx.NewBOM(), nil
 	}
-	return cdc.bom, nil
+	bom = cdc.bom
+	bom.Metadata.Component, err = cdc.getMetadataComponent()
+	return
 }
 
 func (cdc *CmdResultsCycloneDxConverter) Reset(cmdType utils.CommandType, multiScanId, xrayVersion string, entitledForJas, multipleTargets bool, generalError error) (err error) {
@@ -72,6 +74,7 @@ func (cdc *CmdResultsCycloneDxConverter) Reset(cmdType utils.CommandType, multiS
 		Timestamp: time.Now().Format(time.RFC3339),
 		Authors:   &[]cyclonedx.OrganizationalContact{{Name: "JFrog"}},
 	}
+	cdc.targetsComponent = make(map[string]cyclonedx.Component)
 	return
 }
 
@@ -79,37 +82,7 @@ func (cdc *CmdResultsCycloneDxConverter) ParseNewTargetResults(target results.Sc
 	if cdc.bom == nil {
 		return results.ErrResetConvertor
 	}
-	component := cdx.CreateFileOrDirComponent(target.Target)
-	if cdc.bom.Metadata.Component == nil {
-		// Single target
-		cdc.bom.Metadata.Component = &component
-		return
-	}
-	// Multiple targets
-	if cdc.bom.Metadata.Component.Components == nil || len(*cdc.bom.Metadata.Component.Components) == 0 {
-		if cdc.bom.Metadata.Component.BOMRef == component.BOMRef {
-			// The component is already in the BOM
-			return
-		}
-		// The component is not in the BOM, Convert from single target to multiple targets
-		if currentWd, e := os.Getwd(); e != nil {
-			return e
-		} else {
-			wdComponent := cdx.CreateFileOrDirComponent(currentWd)
-			// Add the old main component as a sub-component
-			wdComponent.Components = &[]cyclonedx.Component{*cdc.bom.Metadata.Component}
-			// Set the current working directory as the main component
-			cdc.bom.Metadata.Component = &wdComponent
-		}
-	}
-	for _, existingComponent := range *cdc.bom.Metadata.Component.Components {
-		if existingComponent.BOMRef == component.BOMRef {
-			// The component is already in the BOM
-			return
-		}
-	}
-	// The component is not in the BOM, Add the new sub-component
-	*cdc.bom.Metadata.Component.Components = append(*cdc.bom.Metadata.Component.Components, component)
+	cdc.setTargetComponent(target.Target, cdx.CreateFileOrDirComponent(target.Target))
 	return
 }
 
@@ -178,7 +151,7 @@ func (cdc *CmdResultsCycloneDxConverter) ParseCVEs(target results.ScanTarget, en
 				})
 				for _, evidence := range applicability.Evidence {
 					// Get or create the file component from the BOM
-					fileComponent := cdx.GetComponentByIndex(cdc.bom, cdc.getOrCreateFileComponent(evidence.File))
+					fileComponent := cdx.GetComponentByIndex(cdc.bom, cdc.getOrCreateFileComponent(sarifutils.ExtractRelativePath(evidence.File, strings.TrimPrefix(target.Target, "/"))))
 					// Attach the fileComponent evidence affects to the vulnerability and add the evidence snippet
 					addFileIssueAffects(vulnerability, *fileComponent,
 						cyclonedx.Property{
@@ -196,6 +169,10 @@ func (cdc *CmdResultsCycloneDxConverter) ParseCVEs(target results.ScanTarget, en
 		},
 	)
 	return
+}
+
+func getRelativePath(location *sarif.Location, target results.ScanTarget) (relativePath string) {
+	return sarifutils.ExtractRelativePath(sarifutils.GetLocationFileName(location), target.Target)
 }
 
 func getVulnerabilityAnalysis(applicability *formats.Applicability) *cyclonedx.VulnerabilityAnalysis {
@@ -348,6 +325,7 @@ func (cdc *CmdResultsCycloneDxConverter) ParseSbom(target results.ScanTarget, sb
 		return
 	}
 	// Append the components and dependencies from the sbom to the current BOM
+	cdc.appendMetadata(sbom.Metadata)
 	cdc.appendComponents(sbom.Components)
 	cdc.appendDependencies(sbom.Dependencies)
 	return
@@ -404,7 +382,7 @@ func (cdc *CmdResultsCycloneDxConverter) ParseSecrets(target results.ScanTarget,
 		endLine := sarifutils.GetLocationEndLine(location)
 		endColumn := sarifutils.GetLocationEndColumn(location)
 		// Create or get the affected component
-		affectedComponentIndex := cdc.getOrCreateJasComponent(location)
+		affectedComponentIndex := cdc.getOrCreateJasComponent(target, location)
 		affectedComponent := cdx.GetComponentByIndex(cdc.bom, affectedComponentIndex)
 		// Create a new JAS vulnerability, add it to the BOM and return it
 		properties := []cyclonedx.Property{}
@@ -460,7 +438,7 @@ func (cdc *CmdResultsCycloneDxConverter) ParseIacs(target results.ScanTarget, vi
 	source := cdc.addJasService(iac)
 	return results.ForEachJasIssues(results.ScanResultsToRuns(iac), cdc.entitledForJas, func(run *sarif.Run, rule *sarif.ReportingDescriptor, severity severityutils.Severity, result *sarif.Result, location *sarif.Location) (e error) {
 		// Create or get the affected component
-		affectedComponentIndex := cdc.getOrCreateJasComponent(location)
+		affectedComponentIndex := cdc.getOrCreateJasComponent(target, location)
 		// Create a new JAS vulnerability, add it to the BOM and return it
 		ratings := []cyclonedx.VulnerabilityRating{results.CreateSeverityRating(severity, jasutils.Applicable, source)}
 		jasIssue := cdc.getOrCreateJasIssue(sarifutils.GetResultRuleId(result), sarifutils.GetRuleScannerId(rule), sarifutils.GetResultMsgText(result), sarifutils.GetRuleShortDescriptionText(rule), source, sarifutils.GetRuleCWE(rule), ratings)
@@ -481,7 +459,7 @@ func (cdc *CmdResultsCycloneDxConverter) ParseSast(target results.ScanTarget, vi
 	source := cdc.addJasService(sast)
 	return results.ForEachJasIssues(results.ScanResultsToRuns(sast), cdc.entitledForJas, func(run *sarif.Run, rule *sarif.ReportingDescriptor, severity severityutils.Severity, result *sarif.Result, location *sarif.Location) (e error) {
 		// Create or get the affected component
-		affectedComponentIndex := cdc.getOrCreateJasComponent(location)
+		affectedComponentIndex := cdc.getOrCreateJasComponent(target, location)
 		// Create a new JAS vulnerability, add it to the BOM and return it
 		ratings := []cyclonedx.VulnerabilityRating{results.CreateSeverityRating(severity, jasutils.Applicable, source)}
 		jasIssue := cdc.getOrCreateJasIssue(sarifutils.GetResultRuleId(result), sarifutils.GetRuleScannerId(rule), sarifutils.GetResultMsgText(result), sarifutils.GetRuleShortDescriptionText(rule), source, sarifutils.GetRuleCWE(rule), ratings)
@@ -509,13 +487,11 @@ func (cdc *CmdResultsCycloneDxConverter) getOrCreateScaComponentFromXrayCompId(i
 	return len(*cdc.bom.Components) - 1
 }
 
-func (cdc *CmdResultsCycloneDxConverter) getOrCreateJasComponent(location *sarif.Location) (componentIndex int) {
-	return cdc.getOrCreateFileComponent(sarifutils.GetLocationFileName(location))
+func (cdc *CmdResultsCycloneDxConverter) getOrCreateJasComponent(target results.ScanTarget, location *sarif.Location) (componentIndex int) {
+	return cdc.getOrCreateFileComponent(getRelativePath(location, target))
 }
 
 func (cdc *CmdResultsCycloneDxConverter) getOrCreateFileComponent(filePathOrUri string) (componentIndex int) {
-	// Convert to relative path if the filePathOrUri is absolute
-	filePathOrUri = strings.TrimPrefix(strings.TrimPrefix(filePathOrUri, "file:///"), strings.TrimPrefix(cdc.bom.Metadata.Component.Name, "/"))
 
 	// Check if the component already exists in the BOM
 	if componentIndex = cdx.GetComponentIndex(cdc.bom, cdx.GetFileRef(filePathOrUri)); componentIndex >= 0 {
@@ -588,4 +564,55 @@ func addFileIssueAffects(issue *cyclonedx.Vulnerability, fileComponent cyclonedx
 	cdx.AttachComponentAffects(issue, fileComponent, func(affectedComponent cyclonedx.Component) cyclonedx.Affects {
 		return cyclonedx.Affects{Ref: affectedComponent.BOMRef}
 	}, properties...)
+}
+
+func (cdc *CmdResultsCycloneDxConverter) getMetadataComponent() (component *cyclonedx.Component, err error) {
+	if len(cdc.targetsComponent) == 0 {
+		// No targets
+		return
+	}
+	if len(cdc.targetsComponent) == 1 {
+		for _, target := range cdc.targetsComponent {
+			// Single target - return the only component
+			return &target, nil
+		}
+	}
+	// Multiple targets, main component is the current working directory
+	currentWd, err := os.Getwd()
+	if err != nil {
+		return
+	}
+	wdComponent := cdx.CreateFileOrDirComponent(currentWd)
+	for _, target := range cdc.targetsComponent {
+		if target.BOMRef == wdComponent.BOMRef {
+			// The current working directory is already the main component
+			continue
+		}
+		if wdComponent.Components == nil {
+			wdComponent.Components = &[]cyclonedx.Component{}
+		}
+		// Add the target component as a sub-component of the current working directory
+		*wdComponent.Components = append(*wdComponent.Components, target)
+	}
+	component = &wdComponent
+	return
+}
+
+func (cdc *CmdResultsCycloneDxConverter) appendMetadata(metadata *cyclonedx.Metadata) {
+	if metadata == nil {
+		return
+	}
+	if metadata.Tools != nil && metadata.Tools.Services != nil && len(*metadata.Tools.Services) > 0 {
+		for _, service := range *metadata.Tools.Services {
+			cdx.AddServiceToBomIfNotExists(cdc.bom, service)
+		}
+	}
+	// Resolve the target path from the SBOM metadata component if it exists and set it as the target component.
+	if metadata.Component != nil && metadata.Component.Type == cyclonedx.ComponentTypeFile {
+		cdc.setTargetComponent(metadata.Component.Name, *metadata.Component)
+	}
+}
+
+func (cdc *CmdResultsCycloneDxConverter) setTargetComponent(targetPath string, component cyclonedx.Component) {
+	cdc.targetsComponent[targetPath] = component
 }

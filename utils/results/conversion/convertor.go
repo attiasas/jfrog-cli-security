@@ -1,7 +1,7 @@
 package conversion
 
 import (
-	"strings"
+	// "strings"
 
 	"github.com/CycloneDX/cyclonedx-go"
 	"github.com/jfrog/jfrog-cli-security/utils"
@@ -130,7 +130,7 @@ func parseScaResults[T interface{}](params ResultConvertParams, parser ResultsSt
 	if targetScansResults.ScaResults == nil {
 		return
 	}
-	actualTarget := getScaScanTarget(targetScansResults.ScaResults, targetScansResults.ScanTarget)
+	// actualTarget := getScaScanTarget(targetScansResults.ScaResults, targetScansResults.ScanTarget)
 	var applicableRuns []results.ScanResult[[]*sarif.Run]
 	if jasEntitled && targetScansResults.JasResults != nil {
 		applicableRuns = targetScansResults.JasResults.ApplicabilityScanResults
@@ -143,25 +143,25 @@ func parseScaResults[T interface{}](params ResultConvertParams, parser ResultsSt
 	// Parse deprecated SCA results
 	for _, scaResults := range targetScansResults.ScaResults.XrayResults {
 		if params.IncludeVulnerabilities {
-			if err = parser.ParseScaIssues(actualTarget, false, scaResults, applicableRuns...); err != nil {
+			if err = parser.ParseScaIssues(targetScansResults.ScanTarget, false, scaResults, applicableRuns...); err != nil {
 				return
 			}
 		}
 		if params.HasViolationContext {
-			if err = parser.ParseScaIssues(actualTarget, true, scaResults, applicableRuns...); err != nil {
+			if err = parser.ParseScaIssues(targetScansResults.ScanTarget, true, scaResults, applicableRuns...); err != nil {
 				return
 			}
 		} else if !scaResults.IsScanFailed() && len(scaResults.Scan.Violations) == 0 && len(params.AllowedLicenses) > 0 {
 			// If no violations were found, check if there are licenses that are not allowed
 			if scaResults.Scan.Violations = results.GetViolatedLicenses(params.AllowedLicenses, scaResults.Scan.Licenses); len(scaResults.Scan.Violations) > 0 {
-				if err = parser.ParseScaIssues(actualTarget, true, scaResults); err != nil {
+				if err = parser.ParseScaIssues(targetScansResults.ScanTarget, true, scaResults); err != nil {
 					return
 				}
 			}
 		}
 		// Must be called last for cyclonedxparser to be able to attach the licenses to the components
 		if params.IncludeLicenses {
-			if err = parser.ParseLicenses(actualTarget, scaResults); err != nil {
+			if err = parser.ParseLicenses(targetScansResults.ScanTarget, scaResults); err != nil {
 				return
 			}
 		}
@@ -176,12 +176,12 @@ func parseScaResults[T interface{}](params ResultConvertParams, parser ResultsSt
 			Scan:       targetScansResults.ScaResults.EnrichedSbom,
 			StatusCode: targetScansResults.ScaResults.ScanStatusCode,
 		}
-		if err = parser.ParseCVEs(actualTarget, vulnerabilityScan, applicableRuns...); err != nil {
+		if err = parser.ParseCVEs(targetScansResults.ScanTarget, vulnerabilityScan, applicableRuns...); err != nil {
 			return
 		}
 	}
 	if params.HasViolationContext {
-		if err = parser.ParseViolations(actualTarget, targetScansResults.ScaResults.Violations, applicableRuns...); err != nil {
+		if err = parser.ParseViolations(targetScansResults.ScanTarget, targetScansResults.ScaResults.Violations, applicableRuns...); err != nil {
 			return
 		}
 	}
@@ -191,7 +191,7 @@ func parseScaResults[T interface{}](params ResultConvertParams, parser ResultsSt
 		if targetScansResults.ScaResults.EnrichedSbom.Dependencies != nil {
 			dependencies = append(dependencies, *targetScansResults.ScaResults.EnrichedSbom.Dependencies...)
 		}
-		if err = parser.ParseSbomLicenses(actualTarget, *targetScansResults.ScaResults.EnrichedSbom.Components, dependencies...); err != nil {
+		if err = parser.ParseSbomLicenses(targetScansResults.ScanTarget, *targetScansResults.ScaResults.EnrichedSbom.Components, dependencies...); err != nil {
 			return
 		}
 	}
@@ -199,24 +199,24 @@ func parseScaResults[T interface{}](params ResultConvertParams, parser ResultsSt
 }
 
 // Get the best match for the scan target in the sca results
-func getScaScanTarget(scaResults *results.ScaScanResults, target results.ScanTarget) results.ScanTarget {
-	if scaResults == nil || len(scaResults.Descriptors) == 0 {
-		// If No Sca scan or no descriptors discovered, use the scan target (build-scan, binary-scan...)
-		return target
-	}
-	// Get the one that it's directory is the prefix of the target and the shortest
-	// This is for multi module projects where there are multiple sca results for the same target
-	var bestMatch string
-	for _, descriptor := range scaResults.Descriptors {
-		if strings.HasPrefix(descriptor, target.Target) && (bestMatch == "" || len(descriptor) < len(bestMatch)) {
-			bestMatch = descriptor
-		}
-	}
-	if bestMatch != "" {
-		return target.Copy(bestMatch)
-	}
-	return target
-}
+// func getScaScanTarget(scaResults *results.ScaScanResults, target results.ScanTarget) results.ScanTarget {
+// 	if scaResults == nil || len(scaResults.Descriptors) == 0 {
+// 		// If No Sca scan or no descriptors discovered, use the scan target (build-scan, binary-scan...)
+// 		return target
+// 	}
+// 	// Get the one that it's directory is the prefix of the target and the shortest
+// 	// This is for multi module projects where there are multiple sca results for the same target
+// 	var bestMatch string
+// 	for _, descriptor := range scaResults.Descriptors {
+// 		if strings.HasPrefix(descriptor, target.Target) && (bestMatch == "" || len(descriptor) < len(bestMatch)) {
+// 			bestMatch = descriptor
+// 		}
+// 	}
+// 	if bestMatch != "" {
+// 		return target.Copy(bestMatch)
+// 	}
+// 	return target
+// }
 
 func parseJasResults[T interface{}](params ResultConvertParams, parser ResultsStreamFormatParser[T], targetResults *results.TargetResults, cmdType utils.CommandType) (err error) {
 	if targetResults.JasResults == nil {
