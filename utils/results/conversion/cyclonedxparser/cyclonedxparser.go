@@ -130,7 +130,6 @@ func (cdc *CmdResultsCycloneDxConverter) ParseSbomLicenses(target results.ScanTa
 		return
 	}
 	// Append the components and dependencies from the sbom to the current BOM
-	cdc.addXrayToolIfMissing()
 	cdc.appendComponents(&componentsWithLicenses)
 	return nil
 }
@@ -143,7 +142,6 @@ func (cdc *CmdResultsCycloneDxConverter) ParseCVEs(target results.ScanTarget, en
 		// No vulnerabilities to parse
 		return
 	}
-	source := cdc.addXrayToolIfMissing()
 	cdc.addJasService(applicableScan)
 	err = results.ForEachScaVulnerability(target, enrichedSbom.Scan, cdc.entitledForJas, results.ScanResultsToRuns(applicableScan),
 		func(vulnToParse cyclonedx.Vulnerability, component cyclonedx.Component, fixedVersion *[]cyclonedx.AffectedVersions, applicability *formats.Applicability, severity severityutils.Severity) (e error) {
@@ -157,7 +155,9 @@ func (cdc *CmdResultsCycloneDxConverter) ParseCVEs(target results.ScanTarget, en
 				vulnerability = &(*cdc.bom.Vulnerabilities)[len(*cdc.bom.Vulnerabilities)-1]
 			}
 			if vulnerability.Source == nil {
-				vulnerability.Source = &cyclonedx.Source{Name: source.Name}
+				vulnerability.Source = &cyclonedx.Source{Name: cdc.addXrayToolIfMissing().Name}
+			} else if source := cdx.SearchForServiceByName(cdc.bom, vulnerability.Source.Name); source == nil {
+				cdx.AddServiceToBomIfNotExists(cdc.bom, cyclonedx.Service{Name: vulnerability.Source.Name})
 			}
 			// Add the component to the vulnerability if it is not already attached
 			if cdc.bom.Components == nil {
