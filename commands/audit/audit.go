@@ -15,6 +15,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/jas/secrets"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies"
+	"github.com/jfrog/jfrog-cli-security/sca/bom/scang"
 	"github.com/jfrog/jfrog-cli-security/sca/runner/enrich"
 	jfrogScanGraph "github.com/jfrog/jfrog-cli-security/sca/runner/scangraph"
 	"github.com/jfrog/jfrog-cli-security/utils"
@@ -157,8 +158,15 @@ func shouldIncludeVulnerabilities(includeVulnerabilities bool, watches []string,
 }
 
 func (auditCmd *AuditCommand) Run() (err error) {
-	// If no workingDirs were provided by the user, we apply a recursive scan on the root repository
-	isRecursiveScan := len(auditCmd.workingDirs) == 0
+	isRecursiveScan := false
+	if _, ok := auditCmd.bomGenerator.(*scang.ScangBomGenerator); ok {
+		if len(auditCmd.workingDirs) > 1 {
+			return errors.New("the 'audit' command with the 'scang' BOM generator supports only one working directory. Please provide a single working directory.")
+		}
+	} else {
+		// If no workingDirs were provided by the user, we apply a recursive scan on the root repository
+		isRecursiveScan = len(auditCmd.workingDirs) == 0
+	}
 	workingDirs, err := coreutils.GetFullPathsWorkingDirs(auditCmd.workingDirs)
 	if err != nil {
 		return
