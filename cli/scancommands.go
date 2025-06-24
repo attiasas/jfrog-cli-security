@@ -418,6 +418,9 @@ func AuditCmd(c *components.Context) error {
 	if scaScanStrategy, err := getScaScanStrategy(c); err != nil {
 		return err
 	} else {
+		if _, ok := scaScanStrategy.(*enrichScan.EnrichScanStrategy); ok && auditCmd.OutputFormat() == outputFormat.Json {
+			return fmt.Errorf("the '--%s' flag is not supported with the '%s' output format", flags.BomGenerator, outputFormat.Json)
+		}
 		auditCmd.SetScaScanStrategy(scaScanStrategy)
 	}
 
@@ -431,7 +434,7 @@ func AuditCmd(c *components.Context) error {
 }
 
 func getBomGenerator(c *components.Context) (bom.SbomGenerator, error) {
-	return &scang.ScangBomGenerator{BinaryPath: c.GetStringFlagValue(flags.ScangBinary)}, nil
+	return &scang.ScangBomGenerator{BinaryPath: c.GetStringFlagValue(flags.ScangBinary), IgnorePatterns: pluginsCommon.GetStringsArrFlagValue(c, flags.Exclusions)}, nil
 
 	// switch strings.ToLower(c.GetStringFlagValue(flags.BomGenerator)) {
 	// case "buildinfo":

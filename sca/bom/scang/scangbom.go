@@ -23,7 +23,9 @@ const PluginName = "scangplugin"
 
 type ScangBomGenerator struct {
 	BinaryPath string
-	theadId    int
+	// git ignore patterns to ignore files in the scan
+	IgnorePatterns []string
+	theadId        int
 }
 
 func (sbg *ScangBomGenerator) Parallel(threadId int) bom.SbomGenerator {
@@ -86,8 +88,10 @@ func (sbg *ScangBomGenerator) executeScanner(scangBinary string, target results.
 		return nil, fmt.Errorf("failed to create scang plugin client: %w", err)
 	}
 	scanConfig := Config{
-		Name:    target.Name,
-		Version: "0.0.8",
+		BomRef:         cdx.GetFileRef(target.Target),
+		Type:           string(cyclonedx.ComponentTypeFile),
+		Name:           target.Target,
+		IgnorePatterns: sbg.IgnorePatterns,
 	}
 	return scanner.Scan(target.Target, scanConfig)
 }
